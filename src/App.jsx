@@ -397,7 +397,8 @@ function ScheduleTab({ trip, onUpdateTrip }) {
       <div className="day-tabbar">
         {dateKeys.map((k, i) => (
           <button key={k} className={'day-tab' + (k === selectedDay ? ' active' : '')} onClick={() => setSelectedDay(k)}>
-            Day{i + 1}
+            <div>Day{i + 1}</div>
+            <div className="day-tab-date">{fmtMD(k)}</div>
           </button>
         ))}
       </div>
