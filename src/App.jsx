@@ -600,100 +600,116 @@ function CheckListTab({ items, onChange, placeholder }) {
   )
 }
 
-/* ---------- 持ち物リスト(バッグごとのグループ分け) ---------- */
-function PackingGroup({ group, onUpdateGroup, onDeleteGroup }) {
+/* ---------- 持ち物リスト(バッグごとにタブで切り替え) ---------- */
+function PackingTab({ packingList, onChange }) {
+  const groups = normalizePacking(packingList)
+  const [selectedId, setSelectedId] = useState(groups[0] ? groups[0].id : null)
+  const [showAddGroup, setShowAddGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
   const [editingName, setEditingName] = useState(false)
-  const [nameText, setNameText] = useState(group.name)
+  const [nameText, setNameText] = useState('')
   const [itemText, setItemText] = useState('')
   const [editingItemId, setEditingItemId] = useState(null)
   const [editingItemText, setEditingItemText] = useState('')
 
+  const selected = groups.find(g => g.id === selectedId) || groups[0] || null
+
+  const updateGroup = (updated) => onChange(groups.map(g => g.id === updated.id ? updated : g))
+  const deleteGroup = (id) => {
+    const remaining = groups.filter(g => g.id !== id)
+    onChange(remaining)
+    if (selectedId === id) setSelectedId(remaining[0] ? remaining[0].id : null)
+  }
+  const addGroup = () => {
+    if (!newGroupName.trim()) return
+    const newGroup = { id: genId(), name: newGroupName.trim(), items: [] }
+    onChange([...groups, newGroup])
+    setSelectedId(newGroup.id)
+    setNewGroupName('')
+    setShowAddGroup(false)
+  }
+
+  const startEditName = () => { if (selected) { setNameText(selected.name); setEditingName(true) } }
   const saveName = () => {
-    if (nameText.trim()) onUpdateGroup({ ...group, name: nameText.trim() })
-    else setNameText(group.name)
+    if (selected && nameText.trim()) updateGroup({ ...selected, name: nameText.trim() })
     setEditingName(false)
   }
+
   const addItem = () => {
-    if (!itemText.trim()) return
-    onUpdateGroup({ ...group, items: [...group.items, { id: genId(), text: itemText.trim(), checked: false }] })
+    if (!selected || !itemText.trim()) return
+    updateGroup({ ...selected, items: [...selected.items, { id: genId(), text: itemText.trim(), checked: false }] })
     setItemText('')
   }
-  const toggleItem = (id) => onUpdateGroup({ ...group, items: group.items.map(i => i.id === id ? { ...i, checked: !i.checked } : i) })
-  const removeItem = (id) => onUpdateGroup({ ...group, items: group.items.filter(i => i.id !== id) })
+  const toggleItem = (id) => selected && updateGroup({ ...selected, items: selected.items.map(i => i.id === id ? { ...i, checked: !i.checked } : i) })
+  const removeItem = (id) => selected && updateGroup({ ...selected, items: selected.items.filter(i => i.id !== id) })
   const startEditItem = (item) => { setEditingItemId(item.id); setEditingItemText(item.text) }
   const saveEditItem = () => {
-    if (editingItemText.trim()) {
-      onUpdateGroup({ ...group, items: group.items.map(i => i.id === editingItemId ? { ...i, text: editingItemText.trim() } : i) })
+    if (selected && editingItemText.trim()) {
+      updateGroup({ ...selected, items: selected.items.map(i => i.id === editingItemId ? { ...i, text: editingItemText.trim() } : i) })
     }
     setEditingItemId(null)
   }
 
   return (
-    <div className="packing-group">
-      <div className="packing-group-head">
-        {editingName ? (
-          <input className="field-input inline-edit-input" autoFocus value={nameText}
-            onChange={e => setNameText(e.target.value)} onBlur={saveName} onKeyDown={e => e.key === 'Enter' && saveName()} />
-        ) : (
-          <span className="packing-group-name" onClick={() => setEditingName(true)}>{group.name}</span>
-        )}
-        <button className="del-x" onClick={onDeleteGroup}><X size={16} /></button>
-      </div>
-
-      <div className="add-inline-row">
-        <input className="field-input" value={itemText} onChange={e => setItemText(e.target.value)} placeholder="持ち物を入力"
-          onKeyDown={e => e.key === 'Enter' && addItem()} />
-        <button className="small-add-btn" onClick={addItem}><Plus size={16} /></button>
-      </div>
-
-      {group.items.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '4px auto 10px' }}>まだ何も登録されていません</div>}
-      {group.items.map(i => (
-        <div className="list-card" key={i.id}>
-          <button className={'check-circle' + (i.checked ? ' checked' : '')} onClick={() => toggleItem(i.id)}>
-            {i.checked && <CheckSquare size={12} color="white" strokeWidth={3} />}
-          </button>
-          {editingItemId === i.id ? (
-            <input className="field-input inline-edit-input" autoFocus value={editingItemText}
-              onChange={e => setEditingItemText(e.target.value)} onBlur={saveEditItem} onKeyDown={e => e.key === 'Enter' && saveEditItem()} />
-          ) : (
-            <span className={'list-text' + (i.checked ? ' checked' : '')} style={{ flex: 1 }} onClick={() => startEditItem(i)}>{i.text}</span>
-          )}
-          <button className="del-x" onClick={() => removeItem(i.id)}><X size={15} /></button>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function PackingTab({ packingList, onChange }) {
-  const groups = normalizePacking(packingList)
-  const [showAddGroup, setShowAddGroup] = useState(false)
-  const [newGroupName, setNewGroupName] = useState('')
-
-  const updateGroup = (updated) => onChange(groups.map(g => g.id === updated.id ? updated : g))
-  const deleteGroup = (id) => onChange(groups.filter(g => g.id !== id))
-  const addGroup = () => {
-    if (!newGroupName.trim()) return
-    onChange([...groups, { id: genId(), name: newGroupName.trim(), items: [] }])
-    setNewGroupName('')
-    setShowAddGroup(false)
-  }
-
-  return (
     <div>
-      {groups.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '10px auto' }}>まだバッグがありません</div>}
-      {groups.map(g => (
-        <PackingGroup key={g.id} group={g} onUpdateGroup={updateGroup} onDeleteGroup={() => deleteGroup(g.id)} />
-      ))}
+      <div className="day-tabbar">
+        {groups.map(g => (
+          <button
+            key={g.id}
+            className={'day-tab packing-tab' + (selected && g.id === selected.id ? ' active' : '')}
+            onClick={() => { setSelectedId(g.id); setEditingName(false) }}
+          >
+            <div>{g.name}</div>
+            <div className="day-tab-date">{g.items.filter(i => i.checked).length}/{g.items.length}</div>
+          </button>
+        ))}
+        {showAddGroup ? (
+          <input
+            className="field-input packing-new-bag-input" autoFocus value={newGroupName}
+            onChange={e => setNewGroupName(e.target.value)} placeholder="バッグ名"
+            onKeyDown={e => e.key === 'Enter' && addGroup()} onBlur={() => { if (!newGroupName.trim()) setShowAddGroup(false) }}
+          />
+        ) : (
+          <button className="day-tab packing-tab-add" onClick={() => setShowAddGroup(true)}><Plus size={16} /></button>
+        )}
+      </div>
 
-      {showAddGroup ? (
-        <div className="add-inline-row" style={{ padding: '4px 16px 14px' }}>
-          <input className="field-input" autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
-            placeholder="例:スーツケース(大)" onKeyDown={e => e.key === 'Enter' && addGroup()} />
-          <button className="small-add-btn" onClick={addGroup}><Plus size={16} /></button>
-        </div>
+      {!selected ? (
+        <div className="empty-note-plain" style={{ textAlign: 'center', margin: '10px auto' }}>「＋」でバッグを追加してください</div>
       ) : (
-        <button className="add-schedule-btn" onClick={() => setShowAddGroup(true)}>＋ バッグを追加</button>
+        <div>
+          <div className="packing-group-head">
+            {editingName ? (
+              <input className="field-input inline-edit-input" autoFocus value={nameText}
+                onChange={e => setNameText(e.target.value)} onBlur={saveName} onKeyDown={e => e.key === 'Enter' && saveName()} />
+            ) : (
+              <span className="packing-group-name" onClick={startEditName}>{selected.name}</span>
+            )}
+            <button className="del-x" onClick={() => deleteGroup(selected.id)}><X size={16} /></button>
+          </div>
+
+          <div className="add-inline-row">
+            <input className="field-input" value={itemText} onChange={e => setItemText(e.target.value)} placeholder="持ち物を入力(例:パスポート)"
+              onKeyDown={e => e.key === 'Enter' && addItem()} />
+            <button className="small-add-btn" onClick={addItem}><Plus size={16} /></button>
+          </div>
+
+          {selected.items.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '4px auto 10px' }}>まだ何も登録されていません</div>}
+          {selected.items.map(i => (
+            <div className="list-card" key={i.id}>
+              <button className={'check-circle' + (i.checked ? ' checked' : '')} onClick={() => toggleItem(i.id)}>
+                {i.checked && <CheckSquare size={12} color="white" strokeWidth={3} />}
+              </button>
+              {editingItemId === i.id ? (
+                <input className="field-input inline-edit-input" autoFocus value={editingItemText}
+                  onChange={e => setEditingItemText(e.target.value)} onBlur={saveEditItem} onKeyDown={e => e.key === 'Enter' && saveEditItem()} />
+              ) : (
+                <span className={'list-text' + (i.checked ? ' checked' : '')} style={{ flex: 1 }} onClick={() => startEditItem(i)}>{i.text}</span>
+              )}
+              <button className="del-x" onClick={() => removeItem(i.id)}><X size={15} /></button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
