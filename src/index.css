@@ -96,7 +96,7 @@ button { font-family: inherit; cursor: pointer; }
 .mini-icon-btn { background: rgba(63,169,224,0.1); border: none; border-radius: 10px; padding: 6px; color: var(--sky-deep); flex-shrink: 0; }
 
 .link-text { color: var(--sky-deep); text-decoration: underline; font-size: 12.5px; background: none; border: none; padding: 0; font-family: inherit; }
-.danger-link { color: #C25B3E; text-decoration: underline; font-size: 13px; background: none; border: none; padding: 0; font-family: inherit; }
+.danger-link { color: #C9A79E; text-decoration: underline; font-size: 11.5px; background: none; border: none; padding: 0; font-family: inherit; }
 
 .empty-note-plain { color: #A9B7C0; font-size: 12.5px; padding: 6px 2px 18px; }
 
@@ -168,16 +168,20 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 .add-inline-row { display: flex; gap: 8px; padding: 4px 16px 14px; }
 .add-inline-row .field-input { flex: 1; }
 
-.packing-group { margin: 0 16px 18px; }
-.packing-group .add-inline-row { padding: 4px 0 10px; }
-.packing-group .list-card { margin: 0 0 8px; }
-.packing-group-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 4px; }
-.packing-group-name { font-weight: 700; font-size: 14px; color: var(--navy); cursor: pointer; }
+.packing-group-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 16px 8px; }
+.packing-group-name { font-weight: 700; font-size: 14.5px; color: var(--navy); cursor: pointer; }
+.packing-tab { min-width: 64px; }
+.packing-tab-add {
+  flex-shrink: 0; border: none; background: white; border-radius: 14px; width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center; color: var(--sky-deep);
+  box-shadow: 0 3px 10px rgba(63,169,224,0.07);
+}
+.packing-new-bag-input { width: 120px; flex-shrink: 0; }
 
 .rsv-card { background: white; border-radius: 16px; box-shadow: 0 3px 10px rgba(63,169,224,0.07); margin: 0 16px 10px; padding: 12px 14px; cursor: pointer; }
 .rsv-cat-tag { display: inline-block; border-radius: 8px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; background: var(--sky-soft); color: var(--sky-deep); margin-bottom: 6px; }
 
-.delete-trip-wrap { text-align: center; padding: 28px 16px 10px; }
+.delete-trip-wrap { text-align: center; padding: 70px 16px 24px; margin-top: 24px; border-top: 1px solid #EEF0F2; }
 .confirm-box { text-align: center; padding: 10px 16px 20px; }
 .confirm-text { font-size: 12.5px; color: #7F93A3; margin-bottom: 10px; }
 .confirm-btns { display: flex; gap: 10px; justify-content: center; }
