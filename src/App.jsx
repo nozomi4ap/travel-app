@@ -4,7 +4,7 @@ import { db } from './firebase'
 import {
   Menu, Sparkles, Calendar, MapPin, CheckSquare, ShoppingCart, ChevronRight,
   Plus, X, ArrowLeft, Archive, RotateCcw, User, Package, Ticket, ExternalLink,
-  Camera, Printer, Image as ImageIcon, Pencil,
+  Camera, Printer, Image as ImageIcon, Pencil, Share2, Globe,
 } from 'lucide-react'
 
 /* ---------- Firestoreの参照先 ---------- */
@@ -35,19 +35,76 @@ function normalizePacking(packingList) {
 }
 
 const CATEGORY_STYLES = {
+  /* 以前からあるカテゴリ(古いデータが表示できるように残す) */
   '移動': { bg: '#FFE3DC', text: '#C25B3E', dot: '#FFB4A2' },
-  '食事': { bg: '#FFF3D6', text: '#B8862E', dot: '#FFD97D' },
-  '宿泊': { bg: '#EDE6F9', text: '#6A4FA0', dot: '#B8A6E0' },
   '観光': { bg: '#E1F5EC', text: '#3F8F6C', dot: '#7FC8A9' },
   'その他': { bg: '#EEF0F2', text: '#6B7280', dot: '#C9CED6' },
+  /* 新しいカテゴリ */
+  'なし': { bg: '#EEF0F2', text: '#6B7280', dot: '#C9CED6' },
+  '史跡': { bg: '#FDEFD9', text: '#B3823A', dot: '#F0CE94' },
+  '娯楽': { bg: '#F3E4F7', text: '#9B5FA0', dot: '#D9A6E0' },
+  '体験': { bg: '#FFF0E0', text: '#C97A3D', dot: '#FFC08A' },
+  '食事': { bg: '#FFF3D6', text: '#B8862E', dot: '#FFD97D' },
+  '宿泊': { bg: '#EDE6F9', text: '#6A4FA0', dot: '#B8A6E0' },
+  '買い物': { bg: '#FDE7EA', text: '#C25B7A', dot: '#F2A9BC' },
+  '徒歩': { bg: '#FCE3E3', text: '#C2645B', dot: '#F2A79E' },
+  '車': { bg: '#E3F0FC', text: '#3E7FC2', dot: '#A7C9F2' },
+  'バス': { bg: '#E3F0FC', text: '#3E7FC2', dot: '#A7C9F2' },
+  '列車': { bg: '#E1F5EC', text: '#3F8F6C', dot: '#7FC8A9' },
+  '飛行機': { bg: '#E3F0FC', text: '#3477B8', dot: '#9FC4EE' },
+  '船': { bg: '#E9F7F5', text: '#2F9E90', dot: '#8FDDD1' },
+  'バイク': { bg: '#FCE3E3', text: '#C2645B', dot: '#F2A79E' },
+  '自転車': { bg: '#FCE3E3', text: '#C2645B', dot: '#F2A79E' },
+  '新幹線': { bg: '#E3F0FC', text: '#2E6FB0', dot: '#9FC4EE' },
 }
-const CATEGORIES = Object.keys(CATEGORY_STYLES)
+/* 新規に予定を追加するときに選べるカテゴリ一覧(古いカテゴリは表示だけ対応し、選択肢には出さない) */
+const CATEGORIES = ['なし', '史跡', '娯楽', '体験', '食事', '宿泊', '買い物', '徒歩', '車', 'バス', '列車', '飛行機', '船', 'バイク', '自転車', '新幹線']
 const EMOJI_OPTIONS = ['✈️', '🏖️', '⛰️', '🗼', '🚗', '🚄', '🏯', '🎡', '🍜', '🏕️', '🛳️', '🌸']
 const RSV_CATEGORIES = ['フライト', 'ホテル', 'レンタカー', 'その他']
 
 const mapsUrl = (place) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`
 
-/* 画像を小さく圧縮してFirestoreに保存できるサイズ(base64文字列)にする */
+/* カテゴリごとの線画アイコン(すべて自作のシンプルな線画なので、部品の追加インストールなしで確実に表示される) */
+function CategoryIcon({ category, size = 18 }) {
+  const c = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  switch (category) {
+    case '史跡':
+      return <svg {...c}><path d="M12 3l7 6H5l7-6z" /><line x1="5" y1="9" x2="5" y2="19" /><line x1="19" y1="9" x2="19" y2="19" /><line x1="9" y1="12" x2="9" y2="19" /><line x1="15" y1="12" x2="15" y2="19" /><line x1="4" y1="19" x2="20" y2="19" /></svg>
+    case '娯楽':
+      return <svg {...c}><circle cx="12" cy="12" r="8" /><line x1="12" y1="4" x2="12" y2="20" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="6.3" y1="6.3" x2="17.7" y2="17.7" /><line x1="17.7" y1="6.3" x2="6.3" y2="17.7" /></svg>
+    case '体験':
+      return <svg {...c}><path d="M12 3l2.7 5.9 6.3.6-4.8 4.3 1.4 6.2L12 16.9 6.4 20l1.4-6.2L3 9.5l6.3-.6L12 3z" /></svg>
+    case '食事':
+      return <svg {...c}><line x1="7" y1="3" x2="7" y2="21" /><path d="M5 3v7a2 2 0 0 0 4 0V3" /><path d="M17 3c-1.5 0-2 2-2 4.5S16 12 17 12v9" /></svg>
+    case '宿泊':
+      return <svg {...c}><path d="M3 18v-9a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v3" /><path d="M3 13h16a2 2 0 0 1 2 2v3" /><line x1="3" y1="21" x2="3" y2="13" /><line x1="21" y1="21" x2="21" y2="18" /></svg>
+    case '買い物':
+      return <ShoppingCart size={size} />
+    case '徒歩':
+      return <svg {...c}><circle cx="10" cy="4" r="1.6" /><path d="M9 7l-1.5 5 2 2-1 6" /><path d="M11 7l2 4-1 3 3 5" /><path d="M8 12l3-1" /></svg>
+    case '車':
+    case '移動':
+      return <svg {...c}><path d="M3 15l1.5-5A2 2 0 0 1 6.4 9h11.2a2 2 0 0 1 1.9 1.4L21 15" /><rect x="2.5" y="15" width="19" height="4" rx="1.5" /><circle cx="7" cy="19" r="1.4" /><circle cx="17" cy="19" r="1.4" /></svg>
+    case 'バス':
+      return <svg {...c}><rect x="3" y="5" width="18" height="12" rx="2" /><line x1="3" y1="11" x2="21" y2="11" /><line x1="7" y1="8" x2="7" y2="11" /><line x1="12" y1="8" x2="12" y2="11" /><line x1="17" y1="8" x2="17" y2="11" /><circle cx="7" cy="19" r="1.4" /><circle cx="17" cy="19" r="1.4" /></svg>
+    case '列車':
+      return <svg {...c}><rect x="5" y="4" width="14" height="13" rx="4" /><line x1="5" y1="11" x2="19" y2="11" /><circle cx="9" cy="20" r="1.2" /><circle cx="15" cy="20" r="1.2" /><line x1="7" y1="17" x2="5" y2="20" /><line x1="17" y1="17" x2="19" y2="20" /></svg>
+    case '飛行機':
+      return <svg {...c}><path d="M10.5 21l1.5-5.5 7-4.5-1-1.5-7 2.5-4-4.5-2 .5 2.5 5-4 1.5v2l4.5-1 1 5.5z" /></svg>
+    case '船':
+      return <svg {...c}><path d="M4 14l1.5 5c.3 1 1.2 1.5 2.2 1.5h8.6c1 0 1.9-.5 2.2-1.5L20 14" /><path d="M6 14V7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7" /><line x1="3" y1="14" x2="21" y2="14" /></svg>
+    case 'バイク':
+      return <svg {...c}><circle cx="6" cy="17" r="3" /><circle cx="18" cy="17" r="3" /><path d="M6 17l4-8h5l3 5" /><path d="M10 9h3" /><path d="M15 14l3 3" /></svg>
+    case '自転車':
+      return <svg {...c}><circle cx="6" cy="17" r="3" /><circle cx="18" cy="17" r="3" /><path d="M6 17l5-9h4l3 9" /><line x1="11" y1="8" x2="15" y2="8" /><line x1="11" y1="8" x2="9" y2="17" /></svg>
+    case '新幹線':
+      return <svg {...c}><path d="M3 15c0-4 2-8 7-8h5c3 0 6 3 6 6v2" /><line x1="3" y1="15" x2="21" y2="15" /><circle cx="8" cy="19" r="1.2" /><circle cx="16" cy="19" r="1.2" /><line x1="8" y1="10" x2="8" y2="13" /><line x1="14" y1="10" x2="14" y2="13" /></svg>
+    case '観光':
+      return <svg {...c}><path d="M12 3l2.7 5.9 6.3.6-4.8 4.3 1.4 6.2L12 16.9 6.4 20l1.4-6.2L3 9.5l6.3-.6L12 3z" /></svg>
+    default:
+      return <svg {...c}><circle cx="12" cy="12" r="8" strokeDasharray="3 3" /></svg>
+  }
+}
 function compressImage(file, maxWidth = 900, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -121,7 +178,7 @@ function EmptyNote({ icon, text }) {
 }
 
 function ScheduleMiniRow({ item }) {
-  const st = CATEGORY_STYLES[item.category]
+  const st = CATEGORY_STYLES[item.category] || CATEGORY_STYLES['なし']
   const place = item.location || item.arrivalLocation
   return (
     <div className="card">
@@ -398,13 +455,14 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
   const [time, setTime] = useState(initial ? initial.time : '')
   const [endTime, setEndTime] = useState(initial ? initial.endTime || '' : '')
   const [title, setTitle] = useState(initial ? initial.title : '')
-  const [category, setCategory] = useState(initial ? initial.category : '移動')
+  const [category, setCategory] = useState(initial ? initial.category : 'なし')
   const [location, setLocation] = useState(initial ? initial.location || '' : '')
   const [arrivalLocation, setArrivalLocation] = useState(initial ? initial.arrivalLocation || '' : '')
   const [arrivalIsLocalTime, setArrivalIsLocalTime] = useState(initial ? !!initial.arrivalIsLocalTime : false)
   const [memo, setMemo] = useState(initial ? initial.memo || '' : '')
   const [reservationNumber, setReservationNumber] = useState(initial ? initial.reservationNumber || '' : '')
   const [photo, setPhoto] = useState(initial ? initial.photo || null : null)
+  const [timezoneNote, setTimezoneNote] = useState(initial ? initial.timezoneNote || '' : '')
 
   const canAdd = time && title
 
@@ -412,7 +470,7 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
     if (!canAdd) return
     onAdd({
       id: isEdit ? initial.id : genId(),
-      time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, memo, reservationNumber, photo
+      time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, memo, reservationNumber, photo, timezoneNote
     })
   }
 
@@ -434,10 +492,18 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
         <div className="field-label">予定名</div>
         <input className="field-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="例:新幹線で移動" />
 
-        <div className="field-label">カテゴリ</div>
-        <select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <div className="field-label">アイコン</div>
+        <div className="category-grid">
+          {CATEGORIES.map(c => {
+            const st = CATEGORY_STYLES[c]
+            return (
+              <button key={c} type="button" className={'category-opt' + (category === c ? ' selected' : '')} onClick={() => setCategory(c)}>
+                <span className="category-opt-icon" style={{ background: st.bg, color: st.text }}><CategoryIcon category={c} size={18} /></span>
+                <span>{c}</span>
+              </button>
+            )
+          })}
+        </div>
 
         <div className="field-label">場所</div>
         <div className="grid-2">
@@ -449,6 +515,9 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
           <input type="checkbox" checked={arrivalIsLocalTime} onChange={e => setArrivalIsLocalTime(e.target.checked)} />
           到着時刻は現地時間
         </label>
+
+        <div className="field-label">時差・現地時間の注記(任意)</div>
+        <input className="field-input" value={timezoneNote} onChange={e => setTimezoneNote(e.target.value)} placeholder="例:ハワイ現地時間 / 日本より−19時間" />
 
         <div className="field-label">予約番号(任意)</div>
         <input className="field-input" value={reservationNumber} onChange={e => setReservationNumber(e.target.value)} />
@@ -501,17 +570,21 @@ function ScheduleTab({ trip, onUpdateTrip }) {
       )}
 
       {items.map(item => {
-        const st = CATEGORY_STYLES[item.category]
+        const st = CATEGORY_STYLES[item.category] || CATEGORY_STYLES['なし']
         return (
           <div className="sched-card" key={item.id}>
             <div className="sched-card-top" onClick={() => setEditingItem(item)}>
+              {item.photo && <img src={item.photo} alt="" className="sched-thumb" />}
               <div className="sched-time-col">
                 <div className="start">{item.time}</div>
                 {item.endTime && <div className="end">↓ {item.endTime}{item.arrivalIsLocalTime ? '(現地)' : ''}</div>}
+                {item.timezoneNote && <div className="tz-tag"><Globe size={9} />{item.timezoneNote}</div>}
               </div>
               <div className="sched-main">
-                <span className="cat-badge" style={{ background: st.bg, color: st.text }}>{item.category}</span>
-                <div className="sched-name">{item.title}</div>
+                <div className="sched-name-row">
+                  <span className="sched-cat-icon" style={{ background: st.bg, color: st.text }}><CategoryIcon category={item.category} size={13} /></span>
+                  <span className="sched-name">{item.title}</span>
+                </div>
                 {(item.location || item.arrivalLocation) && (
                   <div className="route-row">
                     {item.location && (
@@ -531,7 +604,6 @@ function ScheduleTab({ trip, onUpdateTrip }) {
                   <div className="rsv-row"><Ticket size={12} />{item.reservationNumber}</div>
                 )}
                 {item.memo && <div className="memo-row">{item.memo}</div>}
-                {item.photo && <img src={item.photo} alt="" className="sched-photo" />}
               </div>
               <button className="del-x" onClick={(e) => { e.stopPropagation(); removeItem(item.id) }}><X size={15} /></button>
             </div>
@@ -812,11 +884,93 @@ function ReservationTab({ reservations, onChange }) {
   )
 }
 
+/* ---------- 共有(合言葉つきリンク) ---------- */
+function ShareSheet({ trip, onClose, onUpdateTrip }) {
+  const [password, setPassword] = useState(trip.sharePassword || '')
+  const [copied, setCopied] = useState(false)
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}?trip=${trip.id}` : ''
+
+  const save = () => {
+    onUpdateTrip({ ...trip, sharePassword: password.trim() ? password.trim() : null })
+  }
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      // コピーに失敗した場合は、下の入力欄から手動でコピーしてもらう
+    }
+  }
+
+  return (
+    <React.Fragment>
+      <div className="sheet-overlay" onClick={onClose} />
+      <div className="sheet">
+        <div className="sheet-head">
+          <h3>この旅行を共有</h3>
+          <button className="icon-btn" onClick={onClose}><X size={20} /></button>
+        </div>
+
+        <div className="field-label">合言葉</div>
+        <input className="field-input" value={password} onChange={e => setPassword(e.target.value)} placeholder="例:family2026" />
+        <div className="share-note">
+          合言葉を設定してURLを共有すると、その両方を知っている人だけがこの旅行を見て編集できます(他の旅行は見えません・削除もできません)。合言葉を空にして保存すると共有はオフになります。
+          <br />※これは家族・友人向けの簡易的な合言葉で、本格的なセキュリティではありません。
+        </div>
+
+        <button className="primary-btn" onClick={save}>この内容で保存</button>
+
+        {trip.sharePassword && (
+          <React.Fragment>
+            <div className="field-label" style={{ marginTop: 18 }}>共有用URL</div>
+            <input className="field-input" value={shareUrl} readOnly onFocus={e => e.target.select()} />
+            <button className="small-add-btn" style={{ marginTop: 10, width: '100%', padding: '10px 0' }} onClick={copyUrl}>
+              {copied ? 'コピーしました' : 'URLをコピー'}
+            </button>
+          </React.Fragment>
+        )}
+      </div>
+    </React.Fragment>
+  )
+}
+
+function SharePasswordGate({ trip, onUnlock }) {
+  const [input, setInput] = useState('')
+  const [error, setError] = useState(false)
+
+  const submit = () => {
+    if (input === trip.sharePassword) {
+      onUnlock()
+    } else {
+      setError(true)
+    }
+  }
+
+  return (
+    <div className="share-gate">
+      <div className="share-gate-card">
+        <div style={{ fontSize: 36 }}>{trip.emoji}</div>
+        <h2>{trip.name}</h2>
+        <p>このしおりを見るには、教えてもらった合言葉を入力してください</p>
+        <input
+          className="field-input" type="text" value={input}
+          onChange={e => { setInput(e.target.value); setError(false) }}
+          placeholder="合言葉" onKeyDown={e => e.key === 'Enter' && submit()}
+        />
+        {error && <div className="share-gate-error">合言葉が違います</div>}
+        <button className="primary-btn" onClick={submit}>開く</button>
+      </div>
+    </div>
+  )
+}
+
 /* ---------- 旅行詳細ページ ---------- */
-function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive, onOpenDrawer }) {
+function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive, onOpenDrawer, sharedMode }) {
   const [tab, setTab] = useState('schedule')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
+  const [showShare, setShowShare] = useState(false)
 
   const tabs = [
     { key: 'schedule', label: '日程', icon: Calendar },
@@ -828,6 +982,9 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
 
   return (
     <div className="app-shell">
+      {sharedMode && (
+        <div className="shared-banner no-print"><Share2 size={13} /> 共有されたしおり(この旅行だけ表示されています)</div>
+      )}
       {trip.coverPhoto && (
         <div className="cover-banner no-print">
           <img src={trip.coverPhoto} alt="" />
@@ -835,14 +992,23 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
       )}
       <div className="detail-header no-print">
         <div className="detail-top-row">
-          <button className="icon-btn" onClick={onBack}><ArrowLeft /></button>
+          {!sharedMode
+            ? <button className="icon-btn" onClick={onBack}><ArrowLeft /></button>
+            : <span style={{ width: 34 }} />}
           <div className="header-actions">
             <button className="icon-btn" onClick={() => setShowEdit(true)}><Pencil size={19} /></button>
             <button className="icon-btn" onClick={() => window.print()}><Printer size={19} /></button>
-            <button className="icon-btn" onClick={() => onToggleArchive(trip.id)}>
-              {trip.archived ? <RotateCcw size={19} /> : <Archive size={19} />}
-            </button>
-            <button className="icon-btn" onClick={onOpenDrawer}><Menu size={19} /></button>
+            {!sharedMode && (
+              <button className="icon-btn" onClick={() => setShowShare(true)}><Share2 size={19} /></button>
+            )}
+            {!sharedMode && (
+              <button className="icon-btn" onClick={() => onToggleArchive(trip.id)}>
+                {trip.archived ? <RotateCcw size={19} /> : <Archive size={19} />}
+              </button>
+            )}
+            {!sharedMode && (
+              <button className="icon-btn" onClick={onOpenDrawer}><Menu size={19} /></button>
+            )}
           </div>
         </div>
         <div className="detail-title-row">
@@ -861,6 +1027,10 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
           onClose={() => setShowEdit(false)}
           onCreate={(updated) => { onUpdateTrip(updated); setShowEdit(false) }}
         />
+      )}
+
+      {showShare && (
+        <ShareSheet trip={trip} onClose={() => setShowShare(false)} onUpdateTrip={onUpdateTrip} />
       )}
 
       {trip.members && trip.members.length > 0 && (
@@ -891,19 +1061,21 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
         {tab === 'reservation' && <ReservationTab reservations={trip.reservations || []} onChange={(r) => onUpdateTrip({ ...trip, reservations: r })} />}
       </div>
 
-      <div className="delete-trip-wrap no-print">
-        {!confirmDelete
-          ? <button className="danger-link" onClick={() => setConfirmDelete(true)}>この旅行を削除する</button>
-          : (
-            <div className="confirm-box">
-              <div className="confirm-text">本当に削除しますか?元に戻せません</div>
-              <div className="confirm-btns">
-                <button className="confirm-delete" onClick={() => onDeleteTrip(trip.id)}>削除する</button>
-                <button className="confirm-cancel" onClick={() => setConfirmDelete(false)}>やめる</button>
+      {!sharedMode && (
+        <div className="delete-trip-wrap no-print">
+          {!confirmDelete
+            ? <button className="danger-link" onClick={() => setConfirmDelete(true)}>この旅行を削除する</button>
+            : (
+              <div className="confirm-box">
+                <div className="confirm-text">本当に削除しますか?元に戻せません</div>
+                <div className="confirm-btns">
+                  <button className="confirm-delete" onClick={() => onDeleteTrip(trip.id)}>削除する</button>
+                  <button className="confirm-cancel" onClick={() => setConfirmDelete(false)}>やめる</button>
+                </div>
               </div>
-            </div>
-          )}
-      </div>
+            )}
+        </div>
+      )}
 
       <PrintableTrip trip={trip} />
     </div>
@@ -944,6 +1116,7 @@ function PrintableTrip({ trip }) {
                   {(item.location || item.arrivalLocation) && (
                     <div className="print-detail">{item.location}{item.location && item.arrivalLocation ? ' → ' : ''}{item.arrivalLocation}</div>
                   )}
+                  {item.timezoneNote && <div className="print-detail">🌐 {item.timezoneNote}</div>}
                   {item.reservationNumber && <div className="print-detail">予約番号: {item.reservationNumber}</div>}
                   {item.memo && <div className="print-detail">メモ: {item.memo}</div>}
                 </div>
@@ -991,6 +1164,12 @@ export default function App() {
   const [view, setView] = useState('home')
   const [selectedTripId, setSelectedTripId] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [sharedUnlocked, setSharedUnlocked] = useState(false)
+
+  const sharedTripId = React.useMemo(() => {
+    if (typeof window === 'undefined') return null
+    return new URLSearchParams(window.location.search).get('trip')
+  }, [])
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -1028,6 +1207,37 @@ export default function App() {
 
   if (!loaded) {
     return <div className="center-loading">読み込み中です…</div>
+  }
+
+  /* 共有リンク(?trip=...)からアクセスした場合は、通常のホーム画面や一覧を経由せず、
+     その旅行だけを合言葉で見せる専用の画面を表示する */
+  if (sharedTripId) {
+    const sharedTrip = trips.find(t => t.id === sharedTripId)
+    if (!sharedTrip) {
+      return <div className="center-loading">このしおりが見つかりませんでした</div>
+    }
+    if (!sharedTrip.sharePassword) {
+      return <div className="center-loading">この旅行は現在共有されていません</div>
+    }
+    if (!sharedUnlocked) {
+      return <SharePasswordGate trip={sharedTrip} onUnlock={() => setSharedUnlocked(true)} />
+    }
+    return (
+      <React.Fragment>
+        {saveError && (
+          <div className="save-error-banner">保存できませんでした。通信環境をご確認ください</div>
+        )}
+        <TripDetail
+          trip={sharedTrip}
+          sharedMode
+          onBack={() => {}}
+          onUpdateTrip={updateTrip}
+          onDeleteTrip={() => {}}
+          onToggleArchive={toggleArchive}
+          onOpenDrawer={() => {}}
+        />
+      </React.Fragment>
+    )
   }
 
   return (
