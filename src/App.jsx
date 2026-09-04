@@ -26,6 +26,14 @@ const rangeDates = (start, end) => {
   return out
 }
 
+/* 持ち物リストを「バッグごとのグループ」形式に揃える。
+   以前のバージョン(グループなしの単純なリスト)のデータも自動で1つのグループにまとめる */
+function normalizePacking(packingList) {
+  if (!packingList || packingList.length === 0) return []
+  if (packingList[0] && packingList[0].items) return packingList
+  return [{ id: genId(), name: '持ち物', items: packingList }]
+}
+
 const CATEGORY_STYLES = {
   '移動': { bg: '#FFE3DC', text: '#C25B3E', dot: '#FFB4A2' },
   '食事': { bg: '#FFF3D6', text: '#B8862E', dot: '#FFD97D' },
@@ -592,6 +600,105 @@ function CheckListTab({ items, onChange, placeholder }) {
   )
 }
 
+/* ---------- 持ち物リスト(バッグごとのグループ分け) ---------- */
+function PackingGroup({ group, onUpdateGroup, onDeleteGroup }) {
+  const [editingName, setEditingName] = useState(false)
+  const [nameText, setNameText] = useState(group.name)
+  const [itemText, setItemText] = useState('')
+  const [editingItemId, setEditingItemId] = useState(null)
+  const [editingItemText, setEditingItemText] = useState('')
+
+  const saveName = () => {
+    if (nameText.trim()) onUpdateGroup({ ...group, name: nameText.trim() })
+    else setNameText(group.name)
+    setEditingName(false)
+  }
+  const addItem = () => {
+    if (!itemText.trim()) return
+    onUpdateGroup({ ...group, items: [...group.items, { id: genId(), text: itemText.trim(), checked: false }] })
+    setItemText('')
+  }
+  const toggleItem = (id) => onUpdateGroup({ ...group, items: group.items.map(i => i.id === id ? { ...i, checked: !i.checked } : i) })
+  const removeItem = (id) => onUpdateGroup({ ...group, items: group.items.filter(i => i.id !== id) })
+  const startEditItem = (item) => { setEditingItemId(item.id); setEditingItemText(item.text) }
+  const saveEditItem = () => {
+    if (editingItemText.trim()) {
+      onUpdateGroup({ ...group, items: group.items.map(i => i.id === editingItemId ? { ...i, text: editingItemText.trim() } : i) })
+    }
+    setEditingItemId(null)
+  }
+
+  return (
+    <div className="packing-group">
+      <div className="packing-group-head">
+        {editingName ? (
+          <input className="field-input inline-edit-input" autoFocus value={nameText}
+            onChange={e => setNameText(e.target.value)} onBlur={saveName} onKeyDown={e => e.key === 'Enter' && saveName()} />
+        ) : (
+          <span className="packing-group-name" onClick={() => setEditingName(true)}>{group.name}</span>
+        )}
+        <button className="del-x" onClick={onDeleteGroup}><X size={16} /></button>
+      </div>
+
+      <div className="add-inline-row">
+        <input className="field-input" value={itemText} onChange={e => setItemText(e.target.value)} placeholder="持ち物を入力"
+          onKeyDown={e => e.key === 'Enter' && addItem()} />
+        <button className="small-add-btn" onClick={addItem}><Plus size={16} /></button>
+      </div>
+
+      {group.items.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '4px auto 10px' }}>まだ何も登録されていません</div>}
+      {group.items.map(i => (
+        <div className="list-card" key={i.id}>
+          <button className={'check-circle' + (i.checked ? ' checked' : '')} onClick={() => toggleItem(i.id)}>
+            {i.checked && <CheckSquare size={12} color="white" strokeWidth={3} />}
+          </button>
+          {editingItemId === i.id ? (
+            <input className="field-input inline-edit-input" autoFocus value={editingItemText}
+              onChange={e => setEditingItemText(e.target.value)} onBlur={saveEditItem} onKeyDown={e => e.key === 'Enter' && saveEditItem()} />
+          ) : (
+            <span className={'list-text' + (i.checked ? ' checked' : '')} style={{ flex: 1 }} onClick={() => startEditItem(i)}>{i.text}</span>
+          )}
+          <button className="del-x" onClick={() => removeItem(i.id)}><X size={15} /></button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PackingTab({ packingList, onChange }) {
+  const groups = normalizePacking(packingList)
+  const [showAddGroup, setShowAddGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+
+  const updateGroup = (updated) => onChange(groups.map(g => g.id === updated.id ? updated : g))
+  const deleteGroup = (id) => onChange(groups.filter(g => g.id !== id))
+  const addGroup = () => {
+    if (!newGroupName.trim()) return
+    onChange([...groups, { id: genId(), name: newGroupName.trim(), items: [] }])
+    setNewGroupName('')
+    setShowAddGroup(false)
+  }
+
+  return (
+    <div>
+      {groups.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '10px auto' }}>まだバッグがありません</div>}
+      {groups.map(g => (
+        <PackingGroup key={g.id} group={g} onUpdateGroup={updateGroup} onDeleteGroup={() => deleteGroup(g.id)} />
+      ))}
+
+      {showAddGroup ? (
+        <div className="add-inline-row" style={{ padding: '4px 16px 14px' }}>
+          <input className="field-input" autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+            placeholder="例:スーツケース(大)" onKeyDown={e => e.key === 'Enter' && addGroup()} />
+          <button className="small-add-btn" onClick={addGroup}><Plus size={16} /></button>
+        </div>
+      ) : (
+        <button className="add-schedule-btn" onClick={() => setShowAddGroup(true)}>＋ バッグを追加</button>
+      )}
+    </div>
+  )
+}
+
 /* ---------- やることリスト(前・中・後) ---------- */
 function TodoTab({ todos, onChange }) {
   const [phase, setPhase] = useState('pre')
@@ -611,31 +718,28 @@ function TodoTab({ todos, onChange }) {
 }
 
 /* ---------- 予約情報タブ ---------- */
-function ReservationTab({ reservations, onChange }) {
-  const [editingId, setEditingId] = useState(null)
-  const [category, setCategory] = useState('フライト')
-  const [name, setName] = useState('')
-  const [number, setNumber] = useState('')
-  const [link, setLink] = useState('')
+function ReservationSheet({ onClose, onSubmit, initial }) {
+  const isEdit = !!initial
+  const [category, setCategory] = useState(initial ? initial.category : 'フライト')
+  const [name, setName] = useState(initial ? initial.name : '')
+  const [number, setNumber] = useState(initial ? initial.number || '' : '')
+  const [link, setLink] = useState(initial ? initial.link || '' : '')
 
-  const resetForm = () => { setEditingId(null); setCategory('フライト'); setName(''); setNumber(''); setLink('') }
+  const canSubmit = name.trim()
 
   const submit = () => {
-    if (!name.trim()) return
-    if (editingId) {
-      onChange(reservations.map(r => r.id === editingId ? { ...r, category, name: name.trim(), number, link } : r))
-    } else {
-      onChange([...reservations, { id: genId(), category, name: name.trim(), number, link }])
-    }
-    resetForm()
+    if (!canSubmit) return
+    onSubmit({ id: isEdit ? initial.id : genId(), category, name: name.trim(), number, link })
   }
-  const remove = (id) => { onChange(reservations.filter(r => r.id !== id)); if (editingId === id) resetForm() }
-  const startEdit = (r) => { setEditingId(r.id); setCategory(r.category); setName(r.name); setNumber(r.number || ''); setLink(r.link || '') }
 
   return (
-    <div>
-      <div style={{ padding: '4px 16px 14px' }}>
-        {editingId && <div className="field-label" style={{ color: 'var(--sky-deep)' }}>予約情報を編集中</div>}
+    <React.Fragment>
+      <div className="sheet-overlay" onClick={onClose} />
+      <div className="sheet">
+        <div className="sheet-head">
+          <h3>{isEdit ? '予約を編集' : '予約を追加'}</h3>
+          <button className="icon-btn" onClick={onClose}><X size={20} /></button>
+        </div>
         <div className="field-label">カテゴリ</div>
         <select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>
           {RSV_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -646,15 +750,29 @@ function ReservationTab({ reservations, onChange }) {
         <input className="field-input" value={number} onChange={e => setNumber(e.target.value)} />
         <div className="field-label">リンク(任意)</div>
         <input className="field-input" value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." />
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button className="small-add-btn" style={{ flex: 1, padding: '10px 0' }} onClick={submit}>{editingId ? 'この内容で保存' : 'この内容で追加'}</button>
-          {editingId && <button className="small-add-btn" style={{ flex: 1, padding: '10px 0', background: '#EEF0F2', color: 'var(--navy)' }} onClick={resetForm}>キャンセル</button>}
-        </div>
+        <button className="primary-btn" disabled={!canSubmit} onClick={submit}>{isEdit ? 'この内容で保存' : 'この内容で追加'}</button>
       </div>
+    </React.Fragment>
+  )
+}
 
-      {reservations.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center' }}>まだ予約情報はありません</div>}
+function ReservationTab({ reservations, onChange }) {
+  const [showAdd, setShowAdd] = useState(false)
+  const [editingItem, setEditingItem] = useState(null)
+
+  const saveItem = (item) => {
+    const exists = reservations.some(r => r.id === item.id)
+    onChange(exists ? reservations.map(r => r.id === item.id ? item : r) : [...reservations, item])
+    setShowAdd(false)
+    setEditingItem(null)
+  }
+  const remove = (id) => onChange(reservations.filter(r => r.id !== id))
+
+  return (
+    <div>
+      {reservations.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '10px auto' }}>まだ予約情報はありません</div>}
       {reservations.map(r => (
-        <div className="rsv-card" key={r.id} onClick={() => startEdit(r)}>
+        <div className="rsv-card" key={r.id} onClick={() => setEditingItem(r)}>
           <span className="rsv-cat-tag">{r.category}</span>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
@@ -670,6 +788,10 @@ function ReservationTab({ reservations, onChange }) {
           </div>
         </div>
       ))}
+
+      <button className="add-schedule-btn" onClick={() => setShowAdd(true)}>＋ 予約を追加</button>
+      {showAdd && <ReservationSheet onClose={() => setShowAdd(false)} onSubmit={saveItem} />}
+      {editingItem && <ReservationSheet onClose={() => setEditingItem(null)} onSubmit={saveItem} initial={editingItem} />}
     </div>
   )
 }
@@ -747,7 +869,7 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
 
       <div className="no-print">
         {tab === 'schedule' && <ScheduleTab trip={trip} onUpdateTrip={onUpdateTrip} />}
-        {tab === 'packing' && <CheckListTab items={trip.packingList || []} onChange={(l) => onUpdateTrip({ ...trip, packingList: l })} placeholder="持ち物を入力" />}
+        {tab === 'packing' && <PackingTab packingList={trip.packingList || []} onChange={(l) => onUpdateTrip({ ...trip, packingList: l })} />}
         {tab === 'shopping' && <CheckListTab items={trip.shoppingList || []} onChange={(l) => onUpdateTrip({ ...trip, shoppingList: l })} placeholder="買うものを入力" />}
         {tab === 'todo' && <TodoTab todos={trip.todos || { pre: [], during: [], post: [] }} onChange={(t) => onUpdateTrip({ ...trip, todos: t })} />}
         {tab === 'reservation' && <ReservationTab reservations={trip.reservations || []} onChange={(r) => onUpdateTrip({ ...trip, reservations: r })} />}
@@ -815,7 +937,14 @@ function PrintableTrip({ trip }) {
       })}
 
       <h2>持ち物リスト</h2>
-      {renderCheckList(trip.packingList)}
+      {normalizePacking(trip.packingList).length === 0
+        ? <p className="print-empty">(なし)</p>
+        : normalizePacking(trip.packingList).map(g => (
+          <div key={g.id} className="print-day">
+            <h3>{g.name}</h3>
+            {renderCheckList(g.items)}
+          </div>
+        ))}
 
       <h2>買うものリスト</h2>
       {renderCheckList(trip.shoppingList)}
