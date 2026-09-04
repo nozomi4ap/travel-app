@@ -4,6 +4,7 @@ import { db } from './firebase'
 import {
   Menu, Sparkles, Calendar, MapPin, CheckSquare, ShoppingCart, ChevronRight,
   Plus, X, ArrowLeft, Archive, RotateCcw, User, Package, Ticket, ExternalLink,
+  Camera, Printer, Image as ImageIcon,
 } from 'lucide-react'
 
 /* ---------- Firestoreの参照先 ---------- */
@@ -37,6 +38,60 @@ const EMOJI_OPTIONS = ['✈️', '🏖️', '⛰️', '🗼', '🚗', '🚄', '�
 const RSV_CATEGORIES = ['フライト', 'ホテル', 'レンタカー', 'その他']
 
 const mapsUrl = (place) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`
+
+/* 画像を小さく圧縮してFirestoreに保存できるサイズ(base64文字列)にする */
+function compressImage(file, maxWidth = 900, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width)
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = reject
+      img.src = e.target.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+/* 写真を選ぶ小さな共通パーツ(表紙写真・予定の写真どちらにも使う) */
+function PhotoPicker({ value, onChange, label }) {
+  const inputId = 'photo-' + genId()
+  const handleFile = async (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    try {
+      const dataUrl = await compressImage(file)
+      onChange(dataUrl)
+    } catch (err) {
+      // 圧縮に失敗した場合は何もしない
+    }
+  }
+  return (
+    <div>
+      <div className="field-label">{label}</div>
+      {value ? (
+        <div className="photo-preview-wrap">
+          <img src={value} alt="" className="photo-preview" />
+          <button className="photo-remove-btn" onClick={() => onChange(null)}><X size={14} /></button>
+        </div>
+      ) : (
+        <label className="photo-add-btn" htmlFor={inputId}>
+          <Camera size={16} /> 写真を選ぶ
+        </label>
+      )}
+      <input id={inputId} type="file" accept="image/*" className="photo-input-hidden" onChange={handleFile} />
+    </div>
+  )
+}
 
 /* ---------- 共通パーツ ---------- */
 function Chip({ label, onRemove }) {
@@ -119,7 +174,10 @@ function Home({ trips, onOpenDrawer, onOpenTrip, onQuickAddTrip }) {
       )}
 
       {trip && (
-        <div className="countdown-card">
+        <div
+          className={'countdown-card' + (trip.coverPhoto ? ' has-photo' : '')}
+          style={trip.coverPhoto ? { backgroundImage: `linear-gradient(180deg, rgba(20,40,55,0.15), rgba(20,40,55,0.55)), url(${trip.coverPhoto})` } : undefined}
+        >
           <div className="countdown-emoji">{trip.emoji}</div>
           <div className="countdown-days">
             {daysLeft > 0 ? `あと${daysLeft}日` : daysLeft === 0 ? '今日から出発!' : '旅行中!'}
@@ -178,6 +236,7 @@ function AddTripSheet({ onClose, onCreate }) {
   const [endDate, setEndDate] = useState('')
   const [members, setMembers] = useState([])
   const [memberInput, setMemberInput] = useState('')
+  const [coverPhoto, setCoverPhoto] = useState(null)
 
   const canCreate = name && destination && startDate && endDate && endDate >= startDate
 
@@ -192,6 +251,7 @@ function AddTripSheet({ onClose, onCreate }) {
     if (!canCreate) return
     onCreate({
       id: genId(), emoji, name, destination, startDate, endDate, members, archived: false,
+      coverPhoto: coverPhoto || null,
       days: {}, packingList: [], shoppingList: [],
       todos: { pre: [], during: [], post: [] }, reservations: [],
     })
@@ -212,6 +272,8 @@ function AddTripSheet({ onClose, onCreate }) {
             <button key={e} className={'emoji-opt' + (emoji === e ? ' selected' : '')} onClick={() => setEmoji(e)}>{e}</button>
           ))}
         </div>
+
+        <PhotoPicker value={coverPhoto} onChange={setCoverPhoto} label="表紙写真(任意)" />
 
         <div className="field-label">旅行名</div>
         <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="例:家族で北海道旅行" />
@@ -325,6 +387,7 @@ function AddScheduleSheet({ onClose, onAdd }) {
   const [arrivalIsLocalTime, setArrivalIsLocalTime] = useState(false)
   const [memo, setMemo] = useState('')
   const [reservationNumber, setReservationNumber] = useState('')
+  const [photo, setPhoto] = useState(null)
 
   const canAdd = time && title
 
@@ -368,8 +431,10 @@ function AddScheduleSheet({ onClose, onAdd }) {
         <div className="field-label">メモ(任意)</div>
         <textarea className="field-input" value={memo} onChange={e => setMemo(e.target.value)} />
 
+        <PhotoPicker value={photo} onChange={setPhoto} label="写真(任意)" />
+
         <button className="primary-btn" disabled={!canAdd} onClick={() => canAdd && onAdd({
-          id: genId(), time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, memo, reservationNumber
+          id: genId(), time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, memo, reservationNumber, photo
         })}>この内容で追加</button>
       </div>
     </React.Fragment>
@@ -438,6 +503,7 @@ function ScheduleTab({ trip, onUpdateTrip }) {
                   <div className="rsv-row"><Ticket size={12} />{item.reservationNumber}</div>
                 )}
                 {item.memo && <div className="memo-row">{item.memo}</div>}
+                {item.photo && <img src={item.photo} alt="" className="sched-photo" />}
               </div>
               <button className="del-x" onClick={() => removeItem(item.id)}><X size={15} /></button>
             </div>
@@ -557,6 +623,18 @@ function ReservationTab({ reservations, onChange }) {
 function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive, onOpenDrawer }) {
   const [tab, setTab] = useState('schedule')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const coverInputId = 'cover-photo-' + trip.id
+
+  const handleCoverChange = async (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    try {
+      const dataUrl = await compressImage(file, 1000, 0.72)
+      onUpdateTrip({ ...trip, coverPhoto: dataUrl })
+    } catch (err) {
+      // 失敗時は何もしない
+    }
+  }
 
   const tabs = [
     { key: 'schedule', label: '日程', icon: Calendar },
@@ -568,10 +646,18 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
 
   return (
     <div className="app-shell">
-      <div className="detail-header">
+      {trip.coverPhoto && (
+        <div className="cover-banner no-print">
+          <img src={trip.coverPhoto} alt="" />
+        </div>
+      )}
+      <div className="detail-header no-print">
         <div className="detail-top-row">
           <button className="icon-btn" onClick={onBack}><ArrowLeft /></button>
           <div className="header-actions">
+            <label className="icon-btn" htmlFor={coverInputId}><Camera size={19} /></label>
+            <input id={coverInputId} type="file" accept="image/*" className="photo-input-hidden" onChange={handleCoverChange} />
+            <button className="icon-btn" onClick={() => window.print()}><Printer size={19} /></button>
             <button className="icon-btn" onClick={() => onToggleArchive(trip.id)}>
               {trip.archived ? <RotateCcw size={19} /> : <Archive size={19} />}
             </button>
@@ -589,14 +675,14 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
       </div>
 
       {trip.members && trip.members.length > 0 && (
-        <div className="member-chips">
+        <div className="member-chips no-print">
           {trip.members.map((m, i) => (
             <span className="chip" key={i}><User size={12} />{m}</span>
           ))}
         </div>
       )}
 
-      <div className="tabbar">
+      <div className="tabbar no-print">
         {tabs.map(t => {
           const Ico = t.icon
           return (
@@ -608,13 +694,15 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
         })}
       </div>
 
-      {tab === 'schedule' && <ScheduleTab trip={trip} onUpdateTrip={onUpdateTrip} />}
-      {tab === 'packing' && <CheckListTab items={trip.packingList || []} onChange={(l) => onUpdateTrip({ ...trip, packingList: l })} placeholder="持ち物を入力" />}
-      {tab === 'shopping' && <CheckListTab items={trip.shoppingList || []} onChange={(l) => onUpdateTrip({ ...trip, shoppingList: l })} placeholder="買うものを入力" />}
-      {tab === 'todo' && <TodoTab todos={trip.todos || { pre: [], during: [], post: [] }} onChange={(t) => onUpdateTrip({ ...trip, todos: t })} />}
-      {tab === 'reservation' && <ReservationTab reservations={trip.reservations || []} onChange={(r) => onUpdateTrip({ ...trip, reservations: r })} />}
+      <div className="no-print">
+        {tab === 'schedule' && <ScheduleTab trip={trip} onUpdateTrip={onUpdateTrip} />}
+        {tab === 'packing' && <CheckListTab items={trip.packingList || []} onChange={(l) => onUpdateTrip({ ...trip, packingList: l })} placeholder="持ち物を入力" />}
+        {tab === 'shopping' && <CheckListTab items={trip.shoppingList || []} onChange={(l) => onUpdateTrip({ ...trip, shoppingList: l })} placeholder="買うものを入力" />}
+        {tab === 'todo' && <TodoTab todos={trip.todos || { pre: [], during: [], post: [] }} onChange={(t) => onUpdateTrip({ ...trip, todos: t })} />}
+        {tab === 'reservation' && <ReservationTab reservations={trip.reservations || []} onChange={(r) => onUpdateTrip({ ...trip, reservations: r })} />}
+      </div>
 
-      <div className="delete-trip-wrap">
+      <div className="delete-trip-wrap no-print">
         {!confirmDelete
           ? <button className="danger-link" onClick={() => setConfirmDelete(true)}>この旅行を削除する</button>
           : (
@@ -627,6 +715,74 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
             </div>
           )}
       </div>
+
+      <PrintableTrip trip={trip} />
+    </div>
+  )
+}
+
+/* ---------- 印刷・PDF用の、しおり全体をまとめた表示 ---------- */
+function PrintableTrip({ trip }) {
+  const dateKeys = rangeDates(trip.startDate, trip.endDate)
+  const renderCheckList = (items) => (
+    <ul className="print-list">
+      {(items || []).length === 0
+        ? <li className="print-empty">(なし)</li>
+        : items.map(i => <li key={i.id}>{i.checked ? '☑' : '☐'} {i.text}</li>)}
+    </ul>
+  )
+  return (
+    <div className="print-only print-sheet">
+      {trip.coverPhoto && <img src={trip.coverPhoto} alt="" className="print-cover" />}
+      <h1>{trip.emoji} {trip.name}</h1>
+      <p className="print-sub">
+        {trip.destination} ・ {fmtRange(trip.startDate, trip.endDate)}
+        {trip.members && trip.members.length > 0 ? ` ・ メンバー: ${trip.members.join('、')}` : ''}
+      </p>
+
+      <h2>日程</h2>
+      {dateKeys.map((k, i) => {
+        const items = ((trip.days && trip.days[k]) || []).slice().sort((a, b) => a.time.localeCompare(b.time))
+        return (
+          <div key={k} className="print-day">
+            <h3>Day{i + 1}({fmtMD(k)})</h3>
+            {items.length === 0
+              ? <p className="print-empty">予定なし</p>
+              : items.map(item => (
+                <div key={item.id} className="print-item">
+                  <strong>{item.time}{item.endTime ? ` → ${item.endTime}` : ''}</strong>
+                  {' '}【{item.category}】{item.title}
+                  {(item.location || item.arrivalLocation) && (
+                    <div className="print-detail">{item.location}{item.location && item.arrivalLocation ? ' → ' : ''}{item.arrivalLocation}</div>
+                  )}
+                  {item.reservationNumber && <div className="print-detail">予約番号: {item.reservationNumber}</div>}
+                  {item.memo && <div className="print-detail">メモ: {item.memo}</div>}
+                </div>
+              ))}
+          </div>
+        )
+      })}
+
+      <h2>持ち物リスト</h2>
+      {renderCheckList(trip.packingList)}
+
+      <h2>買うものリスト</h2>
+      {renderCheckList(trip.shoppingList)}
+
+      <h2>やることリスト</h2>
+      <h4>旅行前</h4>
+      {renderCheckList(trip.todos && trip.todos.pre)}
+      <h4>旅行中</h4>
+      {renderCheckList(trip.todos && trip.todos.during)}
+      <h4>旅行後</h4>
+      {renderCheckList(trip.todos && trip.todos.post)}
+
+      <h2>予約情報</h2>
+      {(!trip.reservations || trip.reservations.length === 0)
+        ? <p className="print-empty">(なし)</p>
+        : trip.reservations.map(r => (
+          <div key={r.id} className="print-item">【{r.category}】{r.name}{r.number ? `(${r.number})` : ''}</div>
+        ))}
     </div>
   )
 }
