@@ -73,6 +73,8 @@ button { font-family: inherit; cursor: pointer; }
 .check-circle { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--sky); flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: white; }
 .check-circle.checked { background: var(--green); border-color: var(--green); }
 .list-text.checked { text-decoration: line-through; color: #B7C2CA; }
+.list-text { cursor: pointer; }
+.inline-edit-input { flex: 1; padding: 6px 10px; font-size: 13.5px; }
 
 .open-btn-wrap { padding: 18px 16px 4px; }
 .open-btn { width: 100%; background: white; color: var(--sky-deep); border: 1.5px solid var(--sky-soft); border-radius: 16px; padding: 13px; font-weight: 700; font-size: 14px; box-shadow: 0 3px 10px rgba(63,169,224,0.07); }
@@ -145,7 +147,7 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 .day-tab-date { font-size: 9.5px; font-weight: 500; opacity: 0.8; }
 
 .sched-card { background: white; border-radius: 16px; box-shadow: 0 3px 10px rgba(63,169,224,0.07); margin: 0 16px 10px; padding: 12px 14px; }
-.sched-card-top { display: flex; gap: 12px; }
+.sched-card-top { display: flex; gap: 12px; cursor: pointer; }
 .sched-time-col { width: 54px; flex-shrink: 0; }
 .sched-time-col .start { font-weight: 700; font-size: 14px; }
 .sched-time-col .end { font-size: 10.5px; color: #A9B7C0; margin-top: 2px; }
@@ -166,7 +168,7 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 .add-inline-row { display: flex; gap: 8px; padding: 4px 16px 14px; }
 .add-inline-row .field-input { flex: 1; }
 
-.rsv-card { background: white; border-radius: 16px; box-shadow: 0 3px 10px rgba(63,169,224,0.07); margin: 0 16px 10px; padding: 12px 14px; }
+.rsv-card { background: white; border-radius: 16px; box-shadow: 0 3px 10px rgba(63,169,224,0.07); margin: 0 16px 10px; padding: 12px 14px; cursor: pointer; }
 .rsv-cat-tag { display: inline-block; border-radius: 8px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; background: var(--sky-soft); color: var(--sky-deep); margin-bottom: 6px; }
 
 .delete-trip-wrap { text-align: center; padding: 28px 16px 10px; }
