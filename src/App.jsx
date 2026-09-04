@@ -4,7 +4,7 @@ import { db } from './firebase'
 import {
   Menu, Sparkles, Calendar, MapPin, CheckSquare, ShoppingCart, ChevronRight,
   Plus, X, ArrowLeft, Archive, RotateCcw, User, Package, Ticket, ExternalLink,
-  Camera, Printer, Image as ImageIcon,
+  Camera, Printer, Image as ImageIcon, Pencil,
 } from 'lucide-react'
 
 /* ---------- Firestoreの参照先 ---------- */
@@ -228,15 +228,16 @@ function Home({ trips, onOpenDrawer, onOpenTrip, onQuickAddTrip }) {
 }
 
 /* ---------- 旅行追加フォーム(ボトムシート) ---------- */
-function AddTripSheet({ onClose, onCreate }) {
-  const [emoji, setEmoji] = useState(EMOJI_OPTIONS[0])
-  const [name, setName] = useState('')
-  const [destination, setDestination] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [members, setMembers] = useState([])
+function AddTripSheet({ onClose, onCreate, initial }) {
+  const isEdit = !!initial
+  const [emoji, setEmoji] = useState(initial ? initial.emoji : EMOJI_OPTIONS[0])
+  const [name, setName] = useState(initial ? initial.name : '')
+  const [destination, setDestination] = useState(initial ? initial.destination : '')
+  const [startDate, setStartDate] = useState(initial ? initial.startDate : '')
+  const [endDate, setEndDate] = useState(initial ? initial.endDate : '')
+  const [members, setMembers] = useState(initial ? initial.members || [] : [])
   const [memberInput, setMemberInput] = useState('')
-  const [coverPhoto, setCoverPhoto] = useState(null)
+  const [coverPhoto, setCoverPhoto] = useState(initial ? initial.coverPhoto || null : null)
 
   const canCreate = name && destination && startDate && endDate && endDate >= startDate
 
@@ -247,14 +248,21 @@ function AddTripSheet({ onClose, onCreate }) {
     }
   }
 
-  const create = () => {
+  const submit = () => {
     if (!canCreate) return
-    onCreate({
-      id: genId(), emoji, name, destination, startDate, endDate, members, archived: false,
-      coverPhoto: coverPhoto || null,
-      days: {}, packingList: [], shoppingList: [],
-      todos: { pre: [], during: [], post: [] }, reservations: [],
-    })
+    if (isEdit) {
+      onCreate({
+        ...initial, emoji, name, destination, startDate, endDate, members,
+        coverPhoto: coverPhoto || null,
+      })
+    } else {
+      onCreate({
+        id: genId(), emoji, name, destination, startDate, endDate, members, archived: false,
+        coverPhoto: coverPhoto || null,
+        days: {}, packingList: [], shoppingList: [],
+        todos: { pre: [], during: [], post: [] }, reservations: [],
+      })
+    }
   }
 
   return (
@@ -262,7 +270,7 @@ function AddTripSheet({ onClose, onCreate }) {
       <div className="sheet-overlay" onClick={onClose} />
       <div className="sheet">
         <div className="sheet-head">
-          <h3>旅行を追加</h3>
+          <h3>{isEdit ? '旅行を編集' : '旅行を追加'}</h3>
           <button className="icon-btn" onClick={onClose}><X size={20} /></button>
         </div>
 
@@ -297,7 +305,7 @@ function AddTripSheet({ onClose, onCreate }) {
           {members.map((m, i) => <Chip key={i} label={m} onRemove={() => setMembers(members.filter((_, idx) => idx !== i))} />)}
         </div>
 
-        <button className="primary-btn" disabled={!canCreate} onClick={create}>この内容で作成</button>
+        <button className="primary-btn" disabled={!canCreate} onClick={submit}>{isEdit ? 'この内容で保存' : 'この内容で作成'}</button>
       </div>
     </React.Fragment>
   )
@@ -377,26 +385,35 @@ function TripDrawer({ trips, onClose, onOpenTrip, onCreate, onToggleArchive }) {
 }
 
 /* ---------- 日程タブ ---------- */
-function AddScheduleSheet({ onClose, onAdd }) {
-  const [time, setTime] = useState('')
-  const [endTime, setEndTime] = useState('')
-  const [title, setTitle] = useState('')
-  const [category, setCategory] = useState('移動')
-  const [location, setLocation] = useState('')
-  const [arrivalLocation, setArrivalLocation] = useState('')
-  const [arrivalIsLocalTime, setArrivalIsLocalTime] = useState(false)
-  const [memo, setMemo] = useState('')
-  const [reservationNumber, setReservationNumber] = useState('')
-  const [photo, setPhoto] = useState(null)
+function AddScheduleSheet({ onClose, onAdd, initial }) {
+  const isEdit = !!initial
+  const [time, setTime] = useState(initial ? initial.time : '')
+  const [endTime, setEndTime] = useState(initial ? initial.endTime || '' : '')
+  const [title, setTitle] = useState(initial ? initial.title : '')
+  const [category, setCategory] = useState(initial ? initial.category : '移動')
+  const [location, setLocation] = useState(initial ? initial.location || '' : '')
+  const [arrivalLocation, setArrivalLocation] = useState(initial ? initial.arrivalLocation || '' : '')
+  const [arrivalIsLocalTime, setArrivalIsLocalTime] = useState(initial ? !!initial.arrivalIsLocalTime : false)
+  const [memo, setMemo] = useState(initial ? initial.memo || '' : '')
+  const [reservationNumber, setReservationNumber] = useState(initial ? initial.reservationNumber || '' : '')
+  const [photo, setPhoto] = useState(initial ? initial.photo || null : null)
 
   const canAdd = time && title
+
+  const submit = () => {
+    if (!canAdd) return
+    onAdd({
+      id: isEdit ? initial.id : genId(),
+      time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, memo, reservationNumber, photo
+    })
+  }
 
   return (
     <React.Fragment>
       <div className="sheet-overlay" onClick={onClose} />
       <div className="sheet">
         <div className="sheet-head">
-          <h3>予定を追加</h3>
+          <h3>{isEdit ? '予定を編集' : '予定を追加'}</h3>
           <button className="icon-btn" onClick={onClose}><X size={20} /></button>
         </div>
 
@@ -433,9 +450,7 @@ function AddScheduleSheet({ onClose, onAdd }) {
 
         <PhotoPicker value={photo} onChange={setPhoto} label="写真(任意)" />
 
-        <button className="primary-btn" disabled={!canAdd} onClick={() => canAdd && onAdd({
-          id: genId(), time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, memo, reservationNumber, photo
-        })}>この内容で追加</button>
+        <button className="primary-btn" disabled={!canAdd} onClick={submit}>{isEdit ? 'この内容で保存' : 'この内容で追加'}</button>
       </div>
     </React.Fragment>
   )
@@ -445,12 +460,17 @@ function ScheduleTab({ trip, onUpdateTrip }) {
   const dateKeys = rangeDates(trip.startDate, trip.endDate)
   const [selectedDay, setSelectedDay] = useState(dateKeys[0])
   const [showAdd, setShowAdd] = useState(false)
+  const [editingItem, setEditingItem] = useState(null)
   const items = ((trip.days && trip.days[selectedDay]) || []).slice().sort((a, b) => a.time.localeCompare(b.time))
 
-  const addItem = (item) => {
-    const newDays = { ...trip.days, [selectedDay]: [...((trip.days && trip.days[selectedDay]) || []), item] }
+  const saveItem = (item) => {
+    const dayItems = (trip.days && trip.days[selectedDay]) || []
+    const exists = dayItems.some(i => i.id === item.id)
+    const newDayItems = exists ? dayItems.map(i => i.id === item.id ? item : i) : [...dayItems, item]
+    const newDays = { ...trip.days, [selectedDay]: newDayItems }
     onUpdateTrip({ ...trip, days: newDays })
     setShowAdd(false)
+    setEditingItem(null)
   }
   const removeItem = (id) => {
     const newDays = { ...trip.days, [selectedDay]: ((trip.days && trip.days[selectedDay]) || []).filter(i => i.id !== id) }
@@ -476,7 +496,7 @@ function ScheduleTab({ trip, onUpdateTrip }) {
         const st = CATEGORY_STYLES[item.category]
         return (
           <div className="sched-card" key={item.id}>
-            <div className="sched-card-top">
+            <div className="sched-card-top" onClick={() => setEditingItem(item)}>
               <div className="sched-time-col">
                 <div className="start">{item.time}</div>
                 {item.endTime && <div className="end">↓ {item.endTime}{item.arrivalIsLocalTime ? '(現地)' : ''}</div>}
@@ -487,13 +507,13 @@ function ScheduleTab({ trip, onUpdateTrip }) {
                 {(item.location || item.arrivalLocation) && (
                   <div className="route-row">
                     {item.location && (
-                      <a className="route-link" href={mapsUrl(item.location)} target="_blank" rel="noreferrer">
+                      <a className="route-link" href={mapsUrl(item.location)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
                         {item.location}<ExternalLink size={11} />
                       </a>
                     )}
                     {item.location && item.arrivalLocation && <span>→</span>}
                     {item.arrivalLocation && (
-                      <a className="route-link" href={mapsUrl(item.arrivalLocation)} target="_blank" rel="noreferrer">
+                      <a className="route-link" href={mapsUrl(item.arrivalLocation)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
                         {item.arrivalLocation}<ExternalLink size={11} />
                       </a>
                     )}
@@ -505,14 +525,15 @@ function ScheduleTab({ trip, onUpdateTrip }) {
                 {item.memo && <div className="memo-row">{item.memo}</div>}
                 {item.photo && <img src={item.photo} alt="" className="sched-photo" />}
               </div>
-              <button className="del-x" onClick={() => removeItem(item.id)}><X size={15} /></button>
+              <button className="del-x" onClick={(e) => { e.stopPropagation(); removeItem(item.id) }}><X size={15} /></button>
             </div>
           </div>
         )
       })}
 
       <button className="add-schedule-btn" onClick={() => setShowAdd(true)}>＋ 予定を追加</button>
-      {showAdd && <AddScheduleSheet onClose={() => setShowAdd(false)} onAdd={addItem} />}
+      {showAdd && <AddScheduleSheet onClose={() => setShowAdd(false)} onAdd={saveItem} />}
+      {editingItem && <AddScheduleSheet onClose={() => setEditingItem(null)} onAdd={saveItem} initial={editingItem} />}
     </div>
   )
 }
@@ -520,6 +541,9 @@ function ScheduleTab({ trip, onUpdateTrip }) {
 /* ---------- チェックリスト共通(持ち物・買うもの) ---------- */
 function CheckListTab({ items, onChange, placeholder }) {
   const [text, setText] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editingText, setEditingText] = useState('')
+
   const add = () => {
     if (!text.trim()) return
     onChange([...items, { id: genId(), text: text.trim(), checked: false }])
@@ -527,6 +551,14 @@ function CheckListTab({ items, onChange, placeholder }) {
   }
   const toggle = (id) => onChange(items.map(i => i.id === id ? { ...i, checked: !i.checked } : i))
   const remove = (id) => onChange(items.filter(i => i.id !== id))
+
+  const startEdit = (item) => { setEditingId(item.id); setEditingText(item.text) }
+  const saveEdit = () => {
+    if (editingText.trim()) {
+      onChange(items.map(i => i.id === editingId ? { ...i, text: editingText.trim() } : i))
+    }
+    setEditingId(null)
+  }
 
   return (
     <div>
@@ -541,7 +573,18 @@ function CheckListTab({ items, onChange, placeholder }) {
           <button className={'check-circle' + (i.checked ? ' checked' : '')} onClick={() => toggle(i.id)}>
             {i.checked && <CheckSquare size={12} color="white" strokeWidth={3} />}
           </button>
-          <span className={'list-text' + (i.checked ? ' checked' : '')} style={{ flex: 1 }}>{i.text}</span>
+          {editingId === i.id ? (
+            <input
+              className="field-input inline-edit-input"
+              value={editingText}
+              autoFocus
+              onChange={e => setEditingText(e.target.value)}
+              onBlur={saveEdit}
+              onKeyDown={e => e.key === 'Enter' && saveEdit()}
+            />
+          ) : (
+            <span className={'list-text' + (i.checked ? ' checked' : '')} style={{ flex: 1 }} onClick={() => startEdit(i)}>{i.text}</span>
+          )}
           <button className="del-x" onClick={() => remove(i.id)}><X size={15} /></button>
         </div>
       ))}
@@ -569,21 +612,30 @@ function TodoTab({ todos, onChange }) {
 
 /* ---------- 予約情報タブ ---------- */
 function ReservationTab({ reservations, onChange }) {
+  const [editingId, setEditingId] = useState(null)
   const [category, setCategory] = useState('フライト')
   const [name, setName] = useState('')
   const [number, setNumber] = useState('')
   const [link, setLink] = useState('')
 
-  const add = () => {
+  const resetForm = () => { setEditingId(null); setCategory('フライト'); setName(''); setNumber(''); setLink('') }
+
+  const submit = () => {
     if (!name.trim()) return
-    onChange([...reservations, { id: genId(), category, name: name.trim(), number, link }])
-    setName(''); setNumber(''); setLink('')
+    if (editingId) {
+      onChange(reservations.map(r => r.id === editingId ? { ...r, category, name: name.trim(), number, link } : r))
+    } else {
+      onChange([...reservations, { id: genId(), category, name: name.trim(), number, link }])
+    }
+    resetForm()
   }
-  const remove = (id) => onChange(reservations.filter(r => r.id !== id))
+  const remove = (id) => { onChange(reservations.filter(r => r.id !== id)); if (editingId === id) resetForm() }
+  const startEdit = (r) => { setEditingId(r.id); setCategory(r.category); setName(r.name); setNumber(r.number || ''); setLink(r.link || '') }
 
   return (
     <div>
       <div style={{ padding: '4px 16px 14px' }}>
+        {editingId && <div className="field-label" style={{ color: 'var(--sky-deep)' }}>予約情報を編集中</div>}
         <div className="field-label">カテゴリ</div>
         <select className="field-input" value={category} onChange={e => setCategory(e.target.value)}>
           {RSV_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -594,24 +646,27 @@ function ReservationTab({ reservations, onChange }) {
         <input className="field-input" value={number} onChange={e => setNumber(e.target.value)} />
         <div className="field-label">リンク(任意)</div>
         <input className="field-input" value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." />
-        <button className="small-add-btn" style={{ marginTop: 10, width: '100%', padding: '10px 0' }} onClick={add}>この内容で追加</button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button className="small-add-btn" style={{ flex: 1, padding: '10px 0' }} onClick={submit}>{editingId ? 'この内容で保存' : 'この内容で追加'}</button>
+          {editingId && <button className="small-add-btn" style={{ flex: 1, padding: '10px 0', background: '#EEF0F2', color: 'var(--navy)' }} onClick={resetForm}>キャンセル</button>}
+        </div>
       </div>
 
       {reservations.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center' }}>まだ予約情報はありません</div>}
       {reservations.map(r => (
-        <div className="rsv-card" key={r.id}>
+        <div className="rsv-card" key={r.id} onClick={() => startEdit(r)}>
           <span className="rsv-cat-tag">{r.category}</span>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div className="sched-name">{r.name}</div>
               {r.number && <div className="rsv-row"><Ticket size={12} />{r.number}</div>}
               {r.link && (
-                <a className="route-link" href={r.link} target="_blank" rel="noreferrer" style={{ marginTop: 5, display: 'inline-flex' }}>
+                <a className="route-link" href={r.link} target="_blank" rel="noreferrer" style={{ marginTop: 5, display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
                   リンクを開く<ExternalLink size={11} />
                 </a>
               )}
             </div>
-            <button className="del-x" onClick={() => remove(r.id)}><X size={15} /></button>
+            <button className="del-x" onClick={(e) => { e.stopPropagation(); remove(r.id) }}><X size={15} /></button>
           </div>
         </div>
       ))}
@@ -623,18 +678,7 @@ function ReservationTab({ reservations, onChange }) {
 function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive, onOpenDrawer }) {
   const [tab, setTab] = useState('schedule')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const coverInputId = 'cover-photo-' + trip.id
-
-  const handleCoverChange = async (e) => {
-    const file = e.target.files && e.target.files[0]
-    if (!file) return
-    try {
-      const dataUrl = await compressImage(file, 1000, 0.72)
-      onUpdateTrip({ ...trip, coverPhoto: dataUrl })
-    } catch (err) {
-      // 失敗時は何もしない
-    }
-  }
+  const [showEdit, setShowEdit] = useState(false)
 
   const tabs = [
     { key: 'schedule', label: '日程', icon: Calendar },
@@ -655,8 +699,7 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
         <div className="detail-top-row">
           <button className="icon-btn" onClick={onBack}><ArrowLeft /></button>
           <div className="header-actions">
-            <label className="icon-btn" htmlFor={coverInputId}><Camera size={19} /></label>
-            <input id={coverInputId} type="file" accept="image/*" className="photo-input-hidden" onChange={handleCoverChange} />
+            <button className="icon-btn" onClick={() => setShowEdit(true)}><Pencil size={19} /></button>
             <button className="icon-btn" onClick={() => window.print()}><Printer size={19} /></button>
             <button className="icon-btn" onClick={() => onToggleArchive(trip.id)}>
               {trip.archived ? <RotateCcw size={19} /> : <Archive size={19} />}
@@ -673,6 +716,14 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
           <span>{fmtRange(trip.startDate, trip.endDate)}</span>
         </div>
       </div>
+
+      {showEdit && (
+        <AddTripSheet
+          initial={trip}
+          onClose={() => setShowEdit(false)}
+          onCreate={(updated) => { onUpdateTrip(updated); setShowEdit(false) }}
+        />
+      )}
 
       {trip.members && trip.members.length > 0 && (
         <div className="member-chips no-print">
