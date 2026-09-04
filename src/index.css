@@ -118,6 +118,14 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 .emoji-opt { width: 42px; height: 42px; border-radius: 12px; border: 1.5px solid #E4E9ED; background: white; font-size: 20px; display: flex; align-items: center; justify-content: center; }
 .emoji-opt.selected { border-color: var(--sky-deep); background: var(--sky-soft); }
 
+.category-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.category-opt {
+  width: 66px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 7px;
+  border-radius: 14px; border: 1.5px solid #E4E9ED; background: white; font-size: 10.5px; color: var(--navy); font-family: inherit;
+}
+.category-opt.selected { border-color: var(--sky-deep); box-shadow: 0 2px 8px rgba(63,169,224,0.18); }
+.category-opt-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
 .member-row { display: flex; gap: 8px; margin-top: 4px; }
 .member-row .field-input { flex: 1; }
 .small-add-btn { border: none; border-radius: 12px; padding: 0 14px; color: white; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, #5FBEEA, #7FCBF2); white-space: nowrap; flex-shrink: 0; }
@@ -151,9 +159,12 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 .sched-time-col { width: 54px; flex-shrink: 0; }
 .sched-time-col .start { font-weight: 700; font-size: 14px; }
 .sched-time-col .end { font-size: 10.5px; color: #A9B7C0; margin-top: 2px; }
+.tz-tag { display: flex; align-items: center; gap: 2px; font-size: 9px; color: #3E7FC2; margin-top: 3px; max-width: 54px; line-height: 1.2; }
 .sched-main { flex: 1; min-width: 0; }
 .cat-badge { display: inline-block; border-radius: 8px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; margin-right: 6px; }
-.sched-name { font-weight: 700; font-size: 13.5px; margin-top: 4px; }
+.sched-name-row { display: flex; align-items: center; gap: 7px; }
+.sched-cat-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sched-name { font-weight: 700; font-size: 13.5px; margin: 0; }
 .route-row { font-size: 11.5px; color: #7F93A3; margin-top: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .route-link { color: var(--sky-deep); text-decoration: none; display: inline-flex; align-items: center; gap: 2px; }
 .rsv-row, .memo-row { font-size: 11px; color: #93A4AF; margin-top: 5px; display: flex; align-items: center; gap: 4px; }
@@ -205,7 +216,7 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 }
 
 /* 予定カードの写真 */
-.sched-photo { width: 100%; max-width: 220px; border-radius: 10px; margin-top: 8px; display: block; }
+.sched-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
 
 /* 旅行詳細ページの表紙写真バナー */
 .cover-banner { width: 100%; height: 140px; overflow: hidden; }
@@ -237,3 +248,23 @@ textarea.field-input { resize: vertical; min-height: 60px; }
   .print-empty { font-size: 12px; color: #999; }
   .print-day { page-break-inside: avoid; }
 }
+
+/* 共有機能 */
+.shared-banner {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--sky-soft); color: var(--sky-deep); font-size: 11.5px; font-weight: 700;
+  padding: 7px 10px; text-align: center;
+}
+.share-note { font-size: 11.5px; color: #7F93A3; line-height: 1.6; margin-top: 8px; }
+.share-gate {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: linear-gradient(180deg, #EDF8FC 0%, #F5FBFD 30%, #FDF6F1 100%);
+}
+.share-gate-card {
+  max-width: 340px; width: 100%; background: white; border-radius: 20px; padding: 28px 22px;
+  box-shadow: 0 6px 20px rgba(63,169,224,0.12); text-align: center;
+}
+.share-gate-card h2 { font-size: 16px; margin: 8px 0 6px; }
+.share-gate-card p { font-size: 12.5px; color: #7F93A3; margin: 0 0 16px; }
+.share-gate-card .field-input { margin-bottom: 10px; text-align: center; }
+.share-gate-error { color: #C25B3E; font-size: 12px; margin-bottom: 10px; }
