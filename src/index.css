@@ -168,6 +168,12 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 .add-inline-row { display: flex; gap: 8px; padding: 4px 16px 14px; }
 .add-inline-row .field-input { flex: 1; }
 
+.packing-group { margin: 0 16px 18px; }
+.packing-group .add-inline-row { padding: 4px 0 10px; }
+.packing-group .list-card { margin: 0 0 8px; }
+.packing-group-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 4px; }
+.packing-group-name { font-weight: 700; font-size: 14px; color: var(--navy); cursor: pointer; }
+
 .rsv-card { background: white; border-radius: 16px; box-shadow: 0 3px 10px rgba(63,169,224,0.07); margin: 0 16px 10px; padding: 12px 14px; cursor: pointer; }
 .rsv-cat-tag { display: inline-block; border-radius: 8px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; background: var(--sky-soft); color: var(--sky-deep); margin-bottom: 6px; }
 
