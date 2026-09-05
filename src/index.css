@@ -114,6 +114,14 @@ button { font-family: inherit; cursor: pointer; }
 textarea.field-input { resize: vertical; min-height: 60px; }
 .grid-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
 
+.toggle-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.toggle-row.three { grid-template-columns: 1fr 1fr 1fr; }
+.toggle-btn {
+  border: 1.5px solid #E4E9ED; background: white; border-radius: 12px; padding: 10px 6px;
+  font-size: 13px; font-weight: 700; color: var(--navy); font-family: inherit;
+}
+.toggle-btn.active { border-color: var(--sky-deep); background: var(--sky-soft); color: var(--sky-deep); }
+
 .emoji-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .emoji-opt { width: 42px; height: 42px; border-radius: 12px; border: 1.5px solid #E4E9ED; background: white; font-size: 20px; display: flex; align-items: center; justify-content: center; }
 .emoji-opt.selected { border-color: var(--sky-deep); background: var(--sky-soft); }
@@ -155,6 +163,10 @@ textarea.field-input { resize: vertical; min-height: 60px; }
 .day-tab-date { font-size: 9.5px; font-weight: 500; opacity: 0.8; }
 
 .sched-card { background: white; border-radius: 16px; box-shadow: 0 3px 10px rgba(63,169,224,0.07); margin: 0 16px 10px; padding: 12px 14px; }
+.sched-continued {
+  display: flex; align-items: center; gap: 8px; border: 1.5px dashed var(--sky-soft); border-radius: 14px;
+  padding: 10px 14px; margin: 0 16px 10px; font-size: 12px; color: var(--sky-deep); background: rgba(63,169,224,0.05); cursor: pointer;
+}
 .sched-card-top { display: flex; gap: 12px; cursor: pointer; }
 .sched-time-col { width: 54px; flex-shrink: 0; }
 .sched-time-col .start { font-weight: 700; font-size: 14px; }
