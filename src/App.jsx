@@ -34,6 +34,21 @@ function normalizePacking(packingList) {
   return [{ id: genId(), name: '持ち物', items: packingList }]
 }
 
+/* 予定を時系列っぽく並べる。
+   飛行機などで「日本時間」の予定と「現地時間」の予定が同じ日に混ざると、
+   数字だけの時刻比較(例:20:50 と 07:50)では現地時間の方が先に来てしまい、
+   実際の順序(出発 → 到着)と逆になってしまう。
+   そこで「日本時間の予定」をまとめて先に、「現地時間の予定」をまとめて後に置き、
+   それぞれのグループの中だけで時刻順に並べる。 */
+function sortScheduleItems(items) {
+  return items.slice().sort((a, b) => {
+    const za = a.startIsLocalTime ? 1 : 0
+    const zb = b.startIsLocalTime ? 1 : 0
+    if (za !== zb) return za - zb
+    return a.time.localeCompare(b.time)
+  })
+}
+
 const CATEGORY_STYLES = {
   /* 以前からあるカテゴリ(古いデータが表示できるように残す) */
   '移動': { bg: '#FFE3DC', text: '#C25B3E', dot: '#FFB4A2' },
@@ -213,7 +228,7 @@ function Home({ trips, onOpenDrawer, onOpenTrip, onQuickAddTrip }) {
     const isDuring = today >= start && today <= end
     dayLabel = isDuring ? '今日の予定' : '初日の予定'
     const key = isDuring ? toKey(today) : trip.startDate
-    scheduleItems = ((trip.days && trip.days[key]) || []).slice().sort((a, b) => a.time.localeCompare(b.time))
+    scheduleItems = sortScheduleItems((trip.days && trip.days[key]) || [])
     daysLeft = Math.round((start - today) / 86400000)
   }
 
@@ -459,10 +474,11 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
   const [location, setLocation] = useState(initial ? initial.location || '' : '')
   const [arrivalLocation, setArrivalLocation] = useState(initial ? initial.arrivalLocation || '' : '')
   const [arrivalIsLocalTime, setArrivalIsLocalTime] = useState(initial ? !!initial.arrivalIsLocalTime : false)
+  const [startIsLocalTime, setStartIsLocalTime] = useState(initial ? !!initial.startIsLocalTime : false)
+  const [arrivalDayOffset, setArrivalDayOffset] = useState(initial && initial.arrivalDayOffset ? initial.arrivalDayOffset : 0)
   const [memo, setMemo] = useState(initial ? initial.memo || '' : '')
   const [reservationNumber, setReservationNumber] = useState(initial ? initial.reservationNumber || '' : '')
   const [photo, setPhoto] = useState(initial ? initial.photo || null : null)
-  const [timezoneNote, setTimezoneNote] = useState(initial ? initial.timezoneNote || '' : '')
 
   const canAdd = time && title
 
@@ -470,7 +486,8 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
     if (!canAdd) return
     onAdd({
       id: isEdit ? initial.id : genId(),
-      time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, memo, reservationNumber, photo, timezoneNote
+      time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, startIsLocalTime, arrivalDayOffset,
+      memo, reservationNumber, photo
     })
   }
 
@@ -487,6 +504,12 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
         <div className="grid-2">
           <input type="time" className="field-input" value={time} onChange={e => setTime(e.target.value)} />
           <input type="time" className="field-input" value={endTime} onChange={e => setEndTime(e.target.value)} placeholder="到着時刻(任意)" />
+        </div>
+
+        <div className="field-label">この開始時刻はどっち?</div>
+        <div className="toggle-row">
+          <button type="button" className={'toggle-btn' + (!startIsLocalTime ? ' active' : '')} onClick={() => setStartIsLocalTime(false)}>🇯🇵 日本時間</button>
+          <button type="button" className={'toggle-btn' + (startIsLocalTime ? ' active' : '')} onClick={() => setStartIsLocalTime(true)}>📍 現地時間</button>
         </div>
 
         <div className="field-label">予定名</div>
@@ -516,8 +539,12 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
           到着時刻は現地時間
         </label>
 
-        <div className="field-label">時差・現地時間の注記(任意)</div>
-        <input className="field-input" value={timezoneNote} onChange={e => setTimezoneNote(e.target.value)} placeholder="例:ハワイ現地時間 / 日本より−19時間" />
+        <div className="field-label">到着日</div>
+        <div className="toggle-row three">
+          <button type="button" className={'toggle-btn' + (arrivalDayOffset === 0 ? ' active' : '')} onClick={() => setArrivalDayOffset(0)}>当日</button>
+          <button type="button" className={'toggle-btn' + (arrivalDayOffset === 1 ? ' active' : '')} onClick={() => setArrivalDayOffset(1)}>翌日</button>
+          <button type="button" className={'toggle-btn' + (arrivalDayOffset === 2 ? ' active' : '')} onClick={() => setArrivalDayOffset(2)}>2日後</button>
+        </div>
 
         <div className="field-label">予約番号(任意)</div>
         <input className="field-input" value={reservationNumber} onChange={e => setReservationNumber(e.target.value)} />
@@ -538,7 +565,21 @@ function ScheduleTab({ trip, onUpdateTrip }) {
   const [selectedDay, setSelectedDay] = useState(dateKeys[0])
   const [showAdd, setShowAdd] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
-  const items = ((trip.days && trip.days[selectedDay]) || []).slice().sort((a, b) => a.time.localeCompare(b.time))
+  const items = sortScheduleItems((trip.days && trip.days[selectedDay]) || [])
+  const selectedIndex = dateKeys.indexOf(selectedDay)
+
+  /* 前日・前々日に入力された予定が、この日に到着するもの(到着日=翌日/2日後)を集める */
+  const continuedItems = []
+  for (let back = 1; back <= 2; back++) {
+    const fromKey = dateKeys[selectedIndex - back]
+    if (!fromKey) continue
+    const fromItems = (trip.days && trip.days[fromKey]) || []
+    fromItems.forEach(item => {
+      if (item.endTime && item.arrivalDayOffset === back) {
+        continuedItems.push({ ...item, daysAgo: back })
+      }
+    })
+  }
 
   const saveItem = (item) => {
     const dayItems = (trip.days && trip.days[selectedDay]) || []
@@ -565,6 +606,16 @@ function ScheduleTab({ trip, onUpdateTrip }) {
         ))}
       </div>
 
+      {continuedItems.map(item => {
+        const st = CATEGORY_STYLES[item.category] || CATEGORY_STYLES['なし']
+        return (
+          <div className="sched-continued" key={'continued-' + item.id} onClick={() => setSelectedDay(dateKeys[selectedIndex - item.daysAgo])}>
+            <span className="sched-cat-icon" style={{ background: st.bg, color: st.text }}><CategoryIcon category={item.category} size={13} /></span>
+            <span>{item.daysAgo === 1 ? '前日から' : '2日前から'}:{item.title} 到着 {item.endTime}{item.arrivalIsLocalTime ? '(現地)' : ''}</span>
+          </div>
+        )
+      })}
+
       {items.length === 0 && (
         <EmptyNote icon={<Calendar size={30} color="#D8E3EA" />} text="この日の予定はまだありません" />
       )}
@@ -576,8 +627,14 @@ function ScheduleTab({ trip, onUpdateTrip }) {
             <div className="sched-card-top" onClick={() => setEditingItem(item)}>
               {item.photo && <img src={item.photo} alt="" className="sched-thumb" />}
               <div className="sched-time-col">
-                <div className="start">{item.time}</div>
-                {item.endTime && <div className="end">↓ {item.endTime}{item.arrivalIsLocalTime ? '(現地)' : ''}</div>}
+                <div className="start">{item.startIsLocalTime ? '📍' : '🇯🇵'} {item.time}</div>
+                {item.endTime && (
+                  <div className="end">
+                    ↓ {item.endTime}{item.arrivalIsLocalTime ? '(現地)' : ''}
+                    {item.arrivalDayOffset === 1 && <span>・翌日</span>}
+                    {item.arrivalDayOffset === 2 && <span>・2日後</span>}
+                  </div>
+                )}
                 {item.timezoneNote && <div className="tz-tag"><Globe size={9} />{item.timezoneNote}</div>}
               </div>
               <div className="sched-main">
@@ -1103,7 +1160,7 @@ function PrintableTrip({ trip }) {
 
       <h2>日程</h2>
       {dateKeys.map((k, i) => {
-        const items = ((trip.days && trip.days[k]) || []).slice().sort((a, b) => a.time.localeCompare(b.time))
+        const items = sortScheduleItems((trip.days && trip.days[k]) || [])
         return (
           <div key={k} className="print-day">
             <h3>Day{i + 1}({fmtMD(k)})</h3>
@@ -1111,7 +1168,7 @@ function PrintableTrip({ trip }) {
               ? <p className="print-empty">予定なし</p>
               : items.map(item => (
                 <div key={item.id} className="print-item">
-                  <strong>{item.time}{item.endTime ? ` → ${item.endTime}` : ''}</strong>
+                  <strong>{item.startIsLocalTime ? '📍' : '🇯🇵'} {item.time}{item.endTime ? ` → ${item.endTime}${item.arrivalIsLocalTime ? '(現地)' : ''}${item.arrivalDayOffset === 1 ? '・翌日' : item.arrivalDayOffset === 2 ? '・2日後' : ''}` : ''}</strong>
                   {' '}【{item.category}】{item.title}
                   {(item.location || item.arrivalLocation) && (
                     <div className="print-detail">{item.location}{item.location && item.arrivalLocation ? ' → ' : ''}{item.arrivalLocation}</div>
