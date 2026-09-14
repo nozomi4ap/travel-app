@@ -4,7 +4,7 @@ import { db } from './firebase'
 import {
   Menu, Sparkles, Calendar, MapPin, CheckSquare, ShoppingCart, ChevronRight,
   Plus, X, ArrowLeft, Archive, RotateCcw, User, Package, Ticket, ExternalLink,
-  Camera, Printer, Image as ImageIcon, Pencil, Share2, Globe,
+  Camera, Printer, Image as ImageIcon, Pencil, Share2, Globe, FileText,
 } from 'lucide-react'
 
 /* ---------- Firestoreの参照先 ---------- */
@@ -32,6 +32,13 @@ function normalizePacking(packingList) {
   if (!packingList || packingList.length === 0) return []
   if (packingList[0] && packingList[0].items) return packingList
   return [{ id: genId(), name: '持ち物', items: packingList }]
+}
+
+/* 以前の「1つの大きなメモ欄」だったデータも、1件ずつのメモリストとして扱えるようにする */
+function normalizeMemoNotes(trip) {
+  if (trip.memoNotes) return trip.memoNotes
+  if (trip.memoText && trip.memoText.trim()) return [{ id: genId(), text: trip.memoText.trim() }]
+  return []
 }
 
 /* 予定を時系列っぽく並べる。
@@ -174,6 +181,27 @@ function EmptyNote({ icon, text }) {
     <div className="empty-note">
       {icon}
       <div>{text}</div>
+    </div>
+  )
+}
+
+/* 画像をタップすると全画面で大きく表示する */
+function Lightbox({ src, onClose }) {
+  useEffect(() => {
+    if (!src) return
+    const meta = document.querySelector('meta[name="viewport"]')
+    const prevContent = meta ? meta.getAttribute('content') : null
+    if (meta) meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes')
+    return () => {
+      if (meta && prevContent !== null) meta.setAttribute('content', prevContent)
+    }
+  }, [src])
+
+  if (!src) return null
+  return (
+    <div className="lightbox-overlay no-print" onClick={onClose}>
+      <button className="lightbox-close" onClick={onClose}><X size={22} /></button>
+      <img src={src} alt="" className="lightbox-img" onClick={e => e.stopPropagation()} />
     </div>
   )
 }
@@ -551,6 +579,7 @@ function ScheduleTab({ trip, onUpdateTrip }) {
   const [selectedDay, setSelectedDay] = useState(dateKeys[0])
   const [showAdd, setShowAdd] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [lightboxSrc, setLightboxSrc] = useState(null)
   const items = sortScheduleItems((trip.days && trip.days[selectedDay]) || [])
   const selectedIndex = dateKeys.indexOf(selectedDay)
 
@@ -611,7 +640,6 @@ function ScheduleTab({ trip, onUpdateTrip }) {
         return (
           <div className="sched-card" key={item.id}>
             <div className="sched-card-top" onClick={() => setEditingItem(item)}>
-              {item.photo && <img src={item.photo} alt="" className="sched-thumb" />}
               <div className="sched-time-col">
                 <div className="start">{item.startIsLocalTime ? '📍' : '🇯🇵'} {item.time}</div>
                 {item.endTime && (
@@ -648,6 +676,12 @@ function ScheduleTab({ trip, onUpdateTrip }) {
                 )}
                 {item.memo && <div className="memo-row">{item.memo}</div>}
               </div>
+              {item.photo && (
+                <img
+                  src={item.photo} alt="" className="sched-thumb"
+                  onClick={(e) => { e.stopPropagation(); setLightboxSrc(item.photo) }}
+                />
+              )}
               <button className="del-x" onClick={(e) => { e.stopPropagation(); removeItem(item.id) }}><X size={15} /></button>
             </div>
           </div>
@@ -657,12 +691,13 @@ function ScheduleTab({ trip, onUpdateTrip }) {
       <button className="add-schedule-btn" onClick={() => setShowAdd(true)}>＋ 予定を追加</button>
       {showAdd && <AddScheduleSheet onClose={() => setShowAdd(false)} onAdd={saveItem} />}
       {editingItem && <AddScheduleSheet onClose={() => setEditingItem(null)} onAdd={saveItem} initial={editingItem} />}
+      <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
   )
 }
 
 /* ---------- チェックリスト共通(持ち物・買うもの) ---------- */
-function CheckListTab({ items, onChange, placeholder }) {
+function CheckListTab({ items, onChange, placeholder, sortChecked }) {
   const [text, setText] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editingText, setEditingText] = useState('')
@@ -683,6 +718,11 @@ function CheckListTab({ items, onChange, placeholder }) {
     setEditingId(null)
   }
 
+  /* 完了ずみを下に回す(元のデータの並び自体は変えず、表示のときだけ並び替える) */
+  const displayItems = sortChecked
+    ? [...items].sort((a, b) => (a.checked === b.checked ? 0 : a.checked ? 1 : -1))
+    : items
+
   return (
     <div>
       <div className="add-inline-row">
@@ -691,7 +731,7 @@ function CheckListTab({ items, onChange, placeholder }) {
         <button className="small-add-btn" onClick={add}><Plus size={16} /></button>
       </div>
       {items.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '10px auto' }}>まだ何も登録されていません</div>}
-      {items.map(i => (
+      {displayItems.map(i => (
         <div className="list-card" key={i.id}>
           <button className={'check-circle' + (i.checked ? ' checked' : '')} onClick={() => toggle(i.id)}>
             {i.checked && <CheckSquare size={12} color="white" strokeWidth={3} />}
@@ -810,7 +850,7 @@ function PackingTab({ packingList, onChange }) {
           </div>
 
           {selected.items.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '4px auto 10px' }}>まだ何も登録されていません</div>}
-          {selected.items.map(i => (
+          {[...selected.items].sort((a, b) => (a.checked === b.checked ? 0 : a.checked ? 1 : -1)).map(i => (
             <div className="list-card" key={i.id}>
               <button className={'check-circle' + (i.checked ? ' checked' : '')} onClick={() => toggleItem(i.id)}>
                 {i.checked && <CheckSquare size={12} color="white" strokeWidth={3} />}
@@ -843,7 +883,7 @@ function TodoTab({ todos, onChange }) {
           <button key={p} className={'sub-tab' + (p === phase ? ' active' : '')} onClick={() => setPhase(p)}>{labels[p]}</button>
         ))}
       </div>
-      <CheckListTab items={(todos && todos[phase]) || []} onChange={update} placeholder="やることを入力" />
+      <CheckListTab items={(todos && todos[phase]) || []} onChange={update} placeholder="やることを入力" sortChecked />
     </div>
   )
 }
@@ -923,6 +963,84 @@ function ReservationTab({ reservations, onChange }) {
       <button className="add-schedule-btn" onClick={() => setShowAdd(true)}>＋ 予約を追加</button>
       {showAdd && <ReservationSheet onClose={() => setShowAdd(false)} onSubmit={saveItem} />}
       {editingItem && <ReservationSheet onClose={() => setEditingItem(null)} onSubmit={saveItem} initial={editingItem} />}
+    </div>
+  )
+}
+
+/* ---------- メモタブ(自由記述メモ + 画像) ---------- */
+function MemoTab({ trip, onUpdateTrip }) {
+  const notes = normalizeMemoNotes(trip)
+  const photos = trip.memoPhotos || []
+  const [text, setText] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editingText, setEditingText] = useState('')
+  const [lightboxSrc, setLightboxSrc] = useState(null)
+
+  const add = () => {
+    if (!text.trim()) return
+    onUpdateTrip({ ...trip, memoNotes: [...notes, { id: genId(), text: text.trim() }] })
+    setText('')
+  }
+  const remove = (id) => onUpdateTrip({ ...trip, memoNotes: notes.filter(n => n.id !== id) })
+  const startEdit = (note) => { setEditingId(note.id); setEditingText(note.text) }
+  const saveEdit = () => {
+    if (editingText.trim()) {
+      onUpdateTrip({ ...trip, memoNotes: notes.map(n => n.id === editingId ? { ...n, text: editingText.trim() } : n) })
+    }
+    setEditingId(null)
+  }
+
+  const addPhoto = async (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    try {
+      const dataUrl = await compressImage(file, 1200, 0.75)
+      onUpdateTrip({ ...trip, memoPhotos: [...photos, { id: genId(), src: dataUrl }] })
+    } catch (err) {
+      // 圧縮に失敗した場合は何もしない
+    }
+    e.target.value = ''
+  }
+  const removePhoto = (id) => onUpdateTrip({ ...trip, memoPhotos: photos.filter(p => p.id !== id) })
+
+  return (
+    <div>
+      <div className="add-inline-row">
+        <input className="field-input" value={text} onChange={e => setText(e.target.value)} placeholder="メモを入力"
+          onKeyDown={e => e.key === 'Enter' && add()} />
+        <button className="small-add-btn" onClick={add}><Plus size={16} /></button>
+      </div>
+      {notes.length === 0 && <div className="empty-note-plain" style={{ textAlign: 'center', margin: '10px auto' }}>まだ何も登録されていません</div>}
+      {notes.map(n => (
+        <div className="list-card" key={n.id}>
+          {editingId === n.id ? (
+            <input
+              className="field-input inline-edit-input" autoFocus value={editingText}
+              onChange={e => setEditingText(e.target.value)} onBlur={saveEdit}
+              onKeyDown={e => e.key === 'Enter' && saveEdit()}
+            />
+          ) : (
+            <span className="list-text" style={{ flex: 1 }} onClick={() => startEdit(n)}>{n.text}</span>
+          )}
+          <button className="del-x" onClick={() => remove(n.id)}><X size={15} /></button>
+        </div>
+      ))}
+
+      <div className="field-label" style={{ margin: '18px 16px 8px' }}>画像</div>
+      <div className="memo-photo-grid">
+        {photos.map(p => (
+          <div className="memo-photo-item" key={p.id}>
+            <img src={p.src} alt="" onClick={() => setLightboxSrc(p.src)} />
+            <button className="memo-photo-remove" onClick={() => removePhoto(p.id)}><X size={12} /></button>
+          </div>
+        ))}
+        <label className="memo-photo-add" htmlFor="memo-photo-input">
+          <Camera size={22} />
+        </label>
+        <input id="memo-photo-input" type="file" accept="image/*" className="photo-input-hidden" onChange={addPhoto} />
+      </div>
+
+      <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
   )
 }
@@ -1021,6 +1139,7 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
     { key: 'shopping', label: '買うもの', icon: ShoppingCart },
     { key: 'todo', label: 'やること', icon: CheckSquare },
     { key: 'reservation', label: '予約', icon: Ticket },
+    { key: 'memo', label: 'メモ', icon: FileText },
   ]
 
   return (
@@ -1099,9 +1218,10 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
       <div className="no-print">
         {tab === 'schedule' && <ScheduleTab trip={trip} onUpdateTrip={onUpdateTrip} />}
         {tab === 'packing' && <PackingTab packingList={trip.packingList || []} onChange={(l) => onUpdateTrip({ ...trip, packingList: l })} />}
-        {tab === 'shopping' && <CheckListTab items={trip.shoppingList || []} onChange={(l) => onUpdateTrip({ ...trip, shoppingList: l })} placeholder="買うものを入力" />}
+        {tab === 'shopping' && <CheckListTab items={trip.shoppingList || []} onChange={(l) => onUpdateTrip({ ...trip, shoppingList: l })} placeholder="買うものを入力" sortChecked />}
         {tab === 'todo' && <TodoTab todos={trip.todos || { pre: [], during: [], post: [] }} onChange={(t) => onUpdateTrip({ ...trip, todos: t })} />}
         {tab === 'reservation' && <ReservationTab reservations={trip.reservations || []} onChange={(r) => onUpdateTrip({ ...trip, reservations: r })} />}
+        {tab === 'memo' && <MemoTab trip={trip} onUpdateTrip={onUpdateTrip} />}
       </div>
 
       {!sharedMode && (
