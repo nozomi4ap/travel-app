@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'
+import { doc, getDoc, deleteDoc, collection, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from './firebase'
 import {
   Menu, Sparkles, Calendar, MapPin, CheckSquare, ShoppingCart, ChevronRight,
@@ -8,7 +8,12 @@ import {
 } from 'lucide-react'
 
 /* ---------- Firestoreの参照先 ---------- */
-const TRIPS_DOC = doc(db, 'appData', 'trips')
+/* 旅行データは「1つの旅行 = 1つの保存場所(ドキュメント)」で持つ。
+   以前はすべての旅行を1つのドキュメントにまとめていたが、写真を増やすと
+   1ドキュメントあたり1MBという上限にすぐ達してしまうため、旅行ごとに分けている。 */
+const TRIPS_COLLECTION = collection(db, 'trips')
+/* 以前の「全部まとめ」形式の保存場所(引っ越し処理のためだけに残してある) */
+const OLD_TRIPS_DOC = doc(db, 'appData', 'trips')
 
 /* ---------- ユーティリティ ---------- */
 const WEEK = ['日', '月', '火', '水', '木', '金', '土']
@@ -1380,36 +1385,77 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      TRIPS_DOC,
-      (snap) => {
-        setTrips(snap.exists() ? (snap.data().value || []) : [])
-        setLoaded(true)
-      },
-      () => {
-        setSaveError(true)
-        setLoaded(true)
+    let unsubscribe = () => {}
+    let cancelled = false
+
+    async function init() {
+      /* 以前の「全部まとめ」形式のデータが残っていたら、旅行ごとの新しい形式に自動で引っ越す */
+      try {
+        const oldSnap = await getDoc(OLD_TRIPS_DOC)
+        if (oldSnap.exists()) {
+          const oldTrips = oldSnap.data().value || []
+          for (const t of oldTrips) {
+            await setDoc(doc(db, 'trips', t.id), t)
+          }
+          await deleteDoc(OLD_TRIPS_DOC)
+        }
+      } catch (e) {
+        // 引っ越しに失敗しても、通常の読み込みは続ける
       }
-    )
-    return () => unsubscribe()
+
+      if (cancelled) return
+      unsubscribe = onSnapshot(
+        TRIPS_COLLECTION,
+        (snap) => {
+          setTrips(snap.docs.map(d => d.data()))
+          setLoaded(true)
+        },
+        () => {
+          setSaveError(true)
+          setLoaded(true)
+        }
+      )
+    }
+    init()
+
+    return () => { cancelled = true; unsubscribe() }
   }, [])
 
-  const persist = async (newTrips) => {
-    setTrips(newTrips)
+  const selectedTrip = trips.find(t => t.id === selectedTripId)
+
+  const updateTrip = async (updated) => {
+    setTrips(prev => prev.map(t => t.id === updated.id ? updated : t))
     try {
-      await setDoc(TRIPS_DOC, { value: newTrips })
+      await setDoc(doc(db, 'trips', updated.id), updated)
       setSaveError(false)
     } catch (e) {
       setSaveError(true)
     }
   }
-
-  const selectedTrip = trips.find(t => t.id === selectedTripId)
-
-  const updateTrip = (updated) => persist(trips.map(t => t.id === updated.id ? updated : t))
-  const createTrip = (t) => persist([...trips, t])
-  const deleteTrip = (id) => { persist(trips.filter(t => t.id !== id)); setView('home'); setSelectedTripId(null) }
-  const toggleArchive = (id) => persist(trips.map(t => t.id === id ? { ...t, archived: !t.archived } : t))
+  const createTrip = async (t) => {
+    setTrips(prev => [...prev, t])
+    try {
+      await setDoc(doc(db, 'trips', t.id), t)
+      setSaveError(false)
+    } catch (e) {
+      setSaveError(true)
+    }
+  }
+  const deleteTrip = async (id) => {
+    setTrips(prev => prev.filter(t => t.id !== id))
+    setView('home')
+    setSelectedTripId(null)
+    try {
+      await deleteDoc(doc(db, 'trips', id))
+      setSaveError(false)
+    } catch (e) {
+      setSaveError(true)
+    }
+  }
+  const toggleArchive = (id) => {
+    const target = trips.find(t => t.id === id)
+    if (target) updateTrip({ ...target, archived: !target.archived })
+  }
 
   const openTrip = (id) => { setSelectedTripId(id); setView('detail'); setDrawerOpen(false) }
 
