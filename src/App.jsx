@@ -187,21 +187,66 @@ function EmptyNote({ icon, text }) {
 
 /* 画像をタップすると全画面で大きく表示する */
 function Lightbox({ src, onClose }) {
+  const [scale, setScale] = useState(1)
+  const [translate, setTranslate] = useState({ x: 0, y: 0 })
+  const pinchRef = React.useRef(null)
+  const panRef = React.useRef(null)
+
   useEffect(() => {
-    if (!src) return
-    const meta = document.querySelector('meta[name="viewport"]')
-    const prevContent = meta ? meta.getAttribute('content') : null
-    if (meta) meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes')
-    return () => {
-      if (meta && prevContent !== null) meta.setAttribute('content', prevContent)
-    }
+    setScale(1)
+    setTranslate({ x: 0, y: 0 })
   }, [src])
+
+  const distance = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX
+    const dy = touches[0].clientY - touches[1].clientY
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      pinchRef.current = { startDist: distance(e.touches), startScale: scale }
+      panRef.current = null
+    } else if (e.touches.length === 1 && scale > 1) {
+      panRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, start: translate }
+    }
+  }
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      e.preventDefault()
+      const next = Math.min(4, Math.max(1, pinchRef.current.startScale * (distance(e.touches) / pinchRef.current.startDist)))
+      setScale(next)
+    } else if (e.touches.length === 1 && panRef.current) {
+      e.preventDefault()
+      const dx = e.touches[0].clientX - panRef.current.startX
+      const dy = e.touches[0].clientY - panRef.current.startY
+      setTranslate({ x: panRef.current.start.x + dx, y: panRef.current.start.y + dy })
+    }
+  }
+  const handleTouchEnd = (e) => {
+    if (e.touches.length < 2) pinchRef.current = null
+    if (e.touches.length === 0) {
+      panRef.current = null
+      if (scale < 1.05) { setScale(1); setTranslate({ x: 0, y: 0 }) }
+    }
+  }
+  const handleDoubleClick = () => {
+    if (scale > 1) { setScale(1); setTranslate({ x: 0, y: 0 }) } else { setScale(2) }
+  }
 
   if (!src) return null
   return (
-    <div className="lightbox-overlay no-print" onClick={onClose}>
+    <div className="lightbox-overlay no-print" onClick={scale === 1 ? onClose : undefined}>
       <button className="lightbox-close" onClick={onClose}><X size={22} /></button>
-      <img src={src} alt="" className="lightbox-img" onClick={e => e.stopPropagation()} />
+      <img
+        src={src} alt="" className="lightbox-img"
+        style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`, touchAction: 'none' }}
+        onClick={e => e.stopPropagation()}
+        onDoubleClick={handleDoubleClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      />
     </div>
   )
 }
