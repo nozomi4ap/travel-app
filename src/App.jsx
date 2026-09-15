@@ -118,7 +118,7 @@ function CategoryIcon({ category, size = 18 }) {
   const emoji = CATEGORY_EMOJI[category] || CATEGORY_EMOJI['なし']
   return <span style={{ fontSize: size, lineHeight: 1, display: 'inline-block' }}>{emoji}</span>
 }
-function compressImage(file, maxWidth = 900, quality = 0.7) {
+function compressImage(file, maxWidth = 700, quality = 0.6) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -529,8 +529,9 @@ function TripDrawer({ trips, onClose, onOpenTrip, onCreate, onToggleArchive }) {
 }
 
 /* ---------- 日程タブ ---------- */
-function AddScheduleSheet({ onClose, onAdd, initial }) {
+function AddScheduleSheet({ onClose, onAdd, initial, onDelete }) {
   const isEdit = !!initial
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [time, setTime] = useState(initial ? initial.time : '')
   const [endTime, setEndTime] = useState(initial ? initial.endTime || '' : '')
   const [title, setTitle] = useState(initial ? initial.title : '')
@@ -619,6 +620,22 @@ function AddScheduleSheet({ onClose, onAdd, initial }) {
         <PhotoPicker value={photo} onChange={setPhoto} label="写真(任意)" />
 
         <button className="primary-btn" disabled={!canAdd} onClick={submit}>{isEdit ? 'この内容で保存' : 'この内容で追加'}</button>
+
+        {isEdit && onDelete && (
+          <div style={{ textAlign: 'center', marginTop: 18 }}>
+            {!confirmDelete ? (
+              <button className="danger-link" onClick={() => setConfirmDelete(true)}>この予定を削除する</button>
+            ) : (
+              <div className="confirm-box">
+                <div className="confirm-text">本当に削除しますか?</div>
+                <div className="confirm-btns">
+                  <button className="confirm-delete" onClick={onDelete}>削除する</button>
+                  <button className="confirm-cancel" onClick={() => setConfirmDelete(false)}>やめる</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </React.Fragment>
   )
@@ -732,7 +749,6 @@ function ScheduleTab({ trip, onUpdateTrip }) {
                   onClick={(e) => { e.stopPropagation(); setLightboxSrc(item.photo) }}
                 />
               )}
-              <button className="del-x" onClick={(e) => { e.stopPropagation(); removeItem(item.id) }}><X size={15} /></button>
             </div>
           </div>
         )
@@ -740,7 +756,14 @@ function ScheduleTab({ trip, onUpdateTrip }) {
 
       <button className="add-schedule-btn" onClick={() => setShowAdd(true)}>＋ 予定を追加</button>
       {showAdd && <AddScheduleSheet onClose={() => setShowAdd(false)} onAdd={saveItem} />}
-      {editingItem && <AddScheduleSheet onClose={() => setEditingItem(null)} onAdd={saveItem} initial={editingItem} />}
+      {editingItem && (
+        <AddScheduleSheet
+          onClose={() => setEditingItem(null)}
+          onAdd={saveItem}
+          initial={editingItem}
+          onDelete={() => { removeItem(editingItem.id); setEditingItem(null) }}
+        />
+      )}
       <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
   )
@@ -1044,7 +1067,7 @@ function MemoTab({ trip, onUpdateTrip }) {
     const file = e.target.files && e.target.files[0]
     if (!file) return
     try {
-      const dataUrl = await compressImage(file, 1200, 0.75)
+      const dataUrl = await compressImage(file, 1000, 0.6)
       onUpdateTrip({ ...trip, memoPhotos: [...photos, { id: genId(), src: dataUrl }] })
     } catch (err) {
       // 圧縮に失敗した場合は何もしない
@@ -1370,10 +1393,19 @@ function PrintableTrip({ trip }) {
 }
 
 /* ---------- アプリ本体 ---------- */
+/* 保存に失敗した理由を、できるだけ分かりやすい言葉にする */
+function describeSaveError(err) {
+  const msg = (err && err.message) || ''
+  if (/longer than|exceeds|too large|1048487/i.test(msg)) {
+    return '写真の合計サイズが大きすぎて保存できませんでした。写真を減らすか、サイズの大きい写真を削除してください。'
+  }
+  return '保存できませんでした。通信環境をご確認ください'
+}
+
 export default function App() {
   const [trips, setTrips] = useState([])
   const [loaded, setLoaded] = useState(false)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const [view, setView] = useState('home')
   const [selectedTripId, setSelectedTripId] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -1410,8 +1442,8 @@ export default function App() {
           setTrips(snap.docs.map(d => d.data()))
           setLoaded(true)
         },
-        () => {
-          setSaveError(true)
+        (err) => {
+          setSaveError(describeSaveError(err))
           setLoaded(true)
         }
       )
@@ -1427,18 +1459,18 @@ export default function App() {
     setTrips(prev => prev.map(t => t.id === updated.id ? updated : t))
     try {
       await setDoc(doc(db, 'trips', updated.id), updated)
-      setSaveError(false)
+      setSaveError(null)
     } catch (e) {
-      setSaveError(true)
+      setSaveError(describeSaveError(e))
     }
   }
   const createTrip = async (t) => {
     setTrips(prev => [...prev, t])
     try {
       await setDoc(doc(db, 'trips', t.id), t)
-      setSaveError(false)
+      setSaveError(null)
     } catch (e) {
-      setSaveError(true)
+      setSaveError(describeSaveError(e))
     }
   }
   const deleteTrip = async (id) => {
@@ -1447,9 +1479,9 @@ export default function App() {
     setSelectedTripId(null)
     try {
       await deleteDoc(doc(db, 'trips', id))
-      setSaveError(false)
+      setSaveError(null)
     } catch (e) {
-      setSaveError(true)
+      setSaveError(describeSaveError(e))
     }
   }
   const toggleArchive = (id) => {
@@ -1479,7 +1511,7 @@ export default function App() {
     return (
       <React.Fragment>
         {saveError && (
-          <div className="save-error-banner">保存できませんでした。通信環境をご確認ください</div>
+          <div className="save-error-banner">{saveError}</div>
         )}
         <TripDetail
           trip={sharedTrip}
@@ -1497,7 +1529,7 @@ export default function App() {
   return (
     <React.Fragment>
       {saveError && (
-        <div className="save-error-banner">保存できませんでした。通信環境をご確認ください</div>
+        <div className="save-error-banner">{saveError}</div>
       )}
       {view === 'home' && (
         <Home
