@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { doc, getDoc, deleteDoc, collection, onSnapshot, setDoc } from 'firebase/firestore'
-import { db } from './firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from './firebase'
 import {
   Menu, Sparkles, Calendar, MapPin, CheckSquare, ShoppingCart, ChevronRight,
   Plus, X, ArrowLeft, Archive, RotateCcw, User, Package, Ticket, ExternalLink,
@@ -53,12 +54,10 @@ function normalizeMemoNotes(trip) {
    そこで「日本時間の予定」をまとめて先に、「現地時間の予定」をまとめて後に置き、
    それぞれのグループの中だけで時刻順に並べる。 */
 function sortScheduleItems(items) {
-  return items.slice().sort((a, b) => {
-    const za = a.startIsLocalTime ? 1 : 0
-    const zb = b.startIsLocalTime ? 1 : 0
-    if (za !== zb) return za - zb
-    return a.time.localeCompare(b.time)
-  })
+  /* 日本時間/現地時間のどちらを先に並べるかは、行き(日本→海外)と帰り(海外→日本)で
+     逆になってしまい、両方に同時に対応できるルールが作れなかったため、
+     ここでは入力された時刻の数字どおりに並べる。🇯🇵/📍の表示はあくまで目印。 */
+  return items.slice().sort((a, b) => a.time.localeCompare(b.time))
 }
 
 const CATEGORY_STYLES = {
@@ -130,7 +129,10 @@ function compressImage(file, maxWidth = 700, quality = 0.6) {
         canvas.height = Math.round(img.height * scale)
         const ctx = canvas.getContext('2d')
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        resolve(canvas.toDataURL('image/jpeg', quality))
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob)
+          else reject(new Error('failed to create blob'))
+        }, 'image/jpeg', quality)
       }
       img.onerror = reject
       img.src = e.target.result
@@ -140,18 +142,31 @@ function compressImage(file, maxWidth = 700, quality = 0.6) {
   })
 }
 
+/* 写真を圧縮して、Firebase Storage(写真専用の保存場所)にアップロードし、そのURLを返す。
+   Firestoreの文書には写真そのものではなくこの短いURLだけを保存するので、1MBの上限にかかりにくい */
+async function uploadPhoto(file, pathPrefix, maxWidth, quality) {
+  const blob = await compressImage(file, maxWidth, quality)
+  const path = `${pathPrefix}/${genId()}.jpg`
+  const fileRef = ref(storage, path)
+  await uploadBytes(fileRef, blob, { contentType: 'image/jpeg' })
+  return await getDownloadURL(fileRef)
+}
+
 /* 写真を選ぶ小さな共通パーツ(表紙写真・予定の写真どちらにも使う) */
-function PhotoPicker({ value, onChange, label }) {
+function PhotoPicker({ value, onChange, label, pathPrefix, maxWidth, quality }) {
   const inputId = 'photo-' + genId()
+  const [uploading, setUploading] = useState(false)
   const handleFile = async (e) => {
     const file = e.target.files && e.target.files[0]
     if (!file) return
+    setUploading(true)
     try {
-      const dataUrl = await compressImage(file)
-      onChange(dataUrl)
+      const url = await uploadPhoto(file, pathPrefix, maxWidth, quality)
+      onChange(url)
     } catch (err) {
-      // 圧縮に失敗した場合は何もしない
+      // アップロードに失敗した場合は何もしない
     }
+    setUploading(false)
   }
   return (
     <div>
@@ -163,10 +178,10 @@ function PhotoPicker({ value, onChange, label }) {
         </div>
       ) : (
         <label className="photo-add-btn" htmlFor={inputId}>
-          <Camera size={16} /> 写真を選ぶ
+          {uploading ? '📤 アップロード中…' : <React.Fragment><Camera size={16} /> 写真を選ぶ</React.Fragment>}
         </label>
       )}
-      <input id={inputId} type="file" accept="image/*" className="photo-input-hidden" onChange={handleFile} />
+      <input id={inputId} type="file" accept="image/*" className="photo-input-hidden" onChange={handleFile} disabled={uploading} />
     </div>
   )
 }
@@ -374,6 +389,8 @@ function Home({ trips, onOpenDrawer, onOpenTrip, onQuickAddTrip }) {
 /* ---------- 旅行追加フォーム(ボトムシート) ---------- */
 function AddTripSheet({ onClose, onCreate, initial }) {
   const isEdit = !!initial
+  const [newTripId] = useState(() => genId())
+  const tripId = initial ? initial.id : newTripId
   const [emoji, setEmoji] = useState(initial ? initial.emoji : EMOJI_OPTIONS[0])
   const [name, setName] = useState(initial ? initial.name : '')
   const [destination, setDestination] = useState(initial ? initial.destination : '')
@@ -401,7 +418,7 @@ function AddTripSheet({ onClose, onCreate, initial }) {
       })
     } else {
       onCreate({
-        id: genId(), emoji, name, destination, startDate, endDate, members, archived: false,
+        id: tripId, emoji, name, destination, startDate, endDate, members, archived: false,
         coverPhoto: coverPhoto || null,
         days: {}, packingList: [], shoppingList: [],
         todos: { pre: [], during: [], post: [] }, reservations: [],
@@ -425,7 +442,7 @@ function AddTripSheet({ onClose, onCreate, initial }) {
           ))}
         </div>
 
-        <PhotoPicker value={coverPhoto} onChange={setCoverPhoto} label="表紙写真(任意)" />
+        <PhotoPicker value={coverPhoto} onChange={setCoverPhoto} label="表紙写真(任意)" pathPrefix={`trips/${tripId}/cover`} maxWidth={1000} quality={0.7} />
 
         <div className="field-label">旅行名</div>
         <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="例:家族で北海道旅行" />
@@ -529,8 +546,10 @@ function TripDrawer({ trips, onClose, onOpenTrip, onCreate, onToggleArchive }) {
 }
 
 /* ---------- 日程タブ ---------- */
-function AddScheduleSheet({ onClose, onAdd, initial, onDelete }) {
+function AddScheduleSheet({ onClose, onAdd, initial, onDelete, tripId }) {
   const isEdit = !!initial
+  const [newItemId] = useState(() => genId())
+  const itemId = initial ? initial.id : newItemId
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [time, setTime] = useState(initial ? initial.time : '')
   const [endTime, setEndTime] = useState(initial ? initial.endTime || '' : '')
@@ -550,7 +569,7 @@ function AddScheduleSheet({ onClose, onAdd, initial, onDelete }) {
   const submit = () => {
     if (!canAdd) return
     onAdd({
-      id: isEdit ? initial.id : genId(),
+      id: itemId,
       time, endTime, title, category, location, arrivalLocation, arrivalIsLocalTime, startIsLocalTime, arrivalDayOffset,
       memo, reservationNumber, photo
     })
@@ -617,7 +636,7 @@ function AddScheduleSheet({ onClose, onAdd, initial, onDelete }) {
         <div className="field-label">メモ(任意)</div>
         <textarea className="field-input" value={memo} onChange={e => setMemo(e.target.value)} />
 
-        <PhotoPicker value={photo} onChange={setPhoto} label="写真(任意)" />
+        <PhotoPicker value={photo} onChange={setPhoto} label="写真(任意)" pathPrefix={`trips/${tripId}/schedule/${itemId}`} maxWidth={900} quality={0.65} />
 
         <button className="primary-btn" disabled={!canAdd} onClick={submit}>{isEdit ? 'この内容で保存' : 'この内容で追加'}</button>
 
@@ -755,12 +774,13 @@ function ScheduleTab({ trip, onUpdateTrip }) {
       })}
 
       <button className="add-schedule-btn" onClick={() => setShowAdd(true)}>＋ 予定を追加</button>
-      {showAdd && <AddScheduleSheet onClose={() => setShowAdd(false)} onAdd={saveItem} />}
+      {showAdd && <AddScheduleSheet onClose={() => setShowAdd(false)} onAdd={saveItem} tripId={trip.id} />}
       {editingItem && (
         <AddScheduleSheet
           onClose={() => setEditingItem(null)}
           onAdd={saveItem}
           initial={editingItem}
+          tripId={trip.id}
           onDelete={() => { removeItem(editingItem.id); setEditingItem(null) }}
         />
       )}
@@ -1063,15 +1083,19 @@ function MemoTab({ trip, onUpdateTrip }) {
     setEditingId(null)
   }
 
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const addPhoto = async (e) => {
     const file = e.target.files && e.target.files[0]
     if (!file) return
+    setUploadingPhoto(true)
     try {
-      const dataUrl = await compressImage(file, 1000, 0.6)
-      onUpdateTrip({ ...trip, memoPhotos: [...photos, { id: genId(), src: dataUrl }] })
+      // Storageに保存するようになったので、地図の文字なども見やすいよう高めの画質にしてある
+      const url = await uploadPhoto(file, `trips/${trip.id}/memo`, 1600, 0.85)
+      onUpdateTrip({ ...trip, memoPhotos: [...photos, { id: genId(), src: url }] })
     } catch (err) {
-      // 圧縮に失敗した場合は何もしない
+      // アップロードに失敗した場合は何もしない
     }
+    setUploadingPhoto(false)
     e.target.value = ''
   }
   const removePhoto = (id) => onUpdateTrip({ ...trip, memoPhotos: photos.filter(p => p.id !== id) })
@@ -1108,9 +1132,9 @@ function MemoTab({ trip, onUpdateTrip }) {
           </div>
         ))}
         <label className="memo-photo-add" htmlFor="memo-photo-input">
-          <Camera size={22} />
+          {uploadingPhoto ? <span style={{ fontSize: 10.5 }}>📤<br />中…</span> : <Camera size={22} />}
         </label>
-        <input id="memo-photo-input" type="file" accept="image/*" className="photo-input-hidden" onChange={addPhoto} />
+        <input id="memo-photo-input" type="file" accept="image/*" className="photo-input-hidden" onChange={addPhoto} disabled={uploadingPhoto} />
       </div>
 
       <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
