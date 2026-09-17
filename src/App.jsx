@@ -1223,6 +1223,95 @@ function SharePasswordGate({ trip, onUnlock }) {
   )
 }
 
+/* ---------- 天気予報(Open-Meteo。無料・登録不要の気象データを利用) ---------- */
+async function geocodePlace(place) {
+  const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(place)}&count=1&language=ja`)
+  const data = await res.json()
+  if (data.results && data.results.length > 0) {
+    return { latitude: data.results[0].latitude, longitude: data.results[0].longitude }
+  }
+  return null
+}
+async function fetchDailyForecast(latitude, longitude) {
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`)
+  const data = await res.json()
+  return data.daily
+}
+function weatherEmoji(code) {
+  if (code === 0) return '☀️'
+  if (code === 1 || code === 2) return '🌤️'
+  if (code === 3) return '☁️'
+  if (code === 45 || code === 48) return '🌫️'
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return '🌧️'
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return '❄️'
+  if ([95, 96, 99].includes(code)) return '⛈️'
+  return '🌡️'
+}
+/* その日の代表地点を決める(その日の一番早い予定の場所→なければ旅行の行き先) */
+function dayRepresentativePlace(trip, dateKey) {
+  const items = ((trip.days && trip.days[dateKey]) || []).slice().sort((a, b) => a.time.localeCompare(b.time))
+  const withPlace = items.find(i => i.arrivalLocation || i.location)
+  return (withPlace && (withPlace.arrivalLocation || withPlace.location)) || trip.destination
+}
+
+function WeatherStrip({ trip }) {
+  const [dayForecasts, setDayForecasts] = useState(null)
+  const [failed, setFailed] = useState(false)
+  const daysKey = JSON.stringify(trip.days)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const dateKeys = rangeDates(trip.startDate, trip.endDate)
+      const dayPlaces = dateKeys.map(date => ({ date, place: dayRepresentativePlace(trip, date) }))
+      const uniquePlaces = [...new Set(dayPlaces.map(d => d.place))]
+      try {
+        const coordsByPlace = {}
+        for (const place of uniquePlaces) {
+          coordsByPlace[place] = await geocodePlace(place)
+        }
+        const forecastByPlace = {}
+        for (const place of uniquePlaces) {
+          const c = coordsByPlace[place]
+          if (c) forecastByPlace[place] = await fetchDailyForecast(c.latitude, c.longitude)
+        }
+        if (cancelled) return
+        const results = dayPlaces
+          .map(({ date, place }) => {
+            const daily = forecastByPlace[place]
+            if (!daily) return null
+            const idx = daily.time.indexOf(date)
+            if (idx === -1) return null
+            return { date, place, code: daily.weathercode[idx], max: Math.round(daily.temperature_2m_max[idx]), min: Math.round(daily.temperature_2m_min[idx]) }
+          })
+          .filter(Boolean)
+        setDayForecasts(results)
+      } catch (e) {
+        if (!cancelled) setFailed(true)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip.destination, trip.startDate, trip.endDate, daysKey])
+
+  if (failed) return null
+  if (dayForecasts === null) return <div className="weather-strip-loading no-print">🌤️ 天気予報を取得中…</div>
+  if (dayForecasts.length === 0) return null
+
+  return (
+    <div className="weather-strip no-print">
+      {dayForecasts.map(d => (
+        <div className="weather-chip" key={d.date} title={d.place}>
+          <div className="weather-date">{fmtMD(d.date)}</div>
+          <div className="weather-emoji">{weatherEmoji(d.code)}</div>
+          <div className="weather-temp">{d.max}°/{d.min}°</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /* ---------- 旅行詳細ページ ---------- */
 function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive, onOpenDrawer, sharedMode }) {
   const [tab, setTab] = useState('schedule')
@@ -1299,6 +1388,8 @@ function TripDetail({ trip, onBack, onUpdateTrip, onDeleteTrip, onToggleArchive,
           ))}
         </div>
       )}
+
+      <WeatherStrip trip={trip} />
 
       <div className="tabbar no-print">
         {tabs.map(t => {
