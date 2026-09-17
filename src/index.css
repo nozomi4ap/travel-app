@@ -168,8 +168,8 @@ textarea.field-input { resize: vertical; min-height: 60px; }
   padding: 10px 14px; margin: 0 16px 10px; font-size: 12px; color: var(--sky-deep); background: rgba(63,169,224,0.05); cursor: pointer;
 }
 .sched-card-top { display: flex; gap: 12px; cursor: pointer; }
-.sched-time-col { width: 54px; flex-shrink: 0; }
-.sched-time-col .start { font-weight: 700; font-size: 14px; }
+.sched-time-col { width: 68px; flex-shrink: 0; }
+.sched-time-col .start { font-weight: 700; font-size: 13px; white-space: nowrap; }
 .sched-time-col .end { font-size: 10.5px; color: #A9B7C0; margin-top: 2px; }
 .tz-tag { display: flex; align-items: center; gap: 2px; font-size: 9px; color: #3E7FC2; margin-top: 3px; max-width: 54px; line-height: 1.2; }
 .sched-main { flex: 1; min-width: 0; }
@@ -306,3 +306,14 @@ textarea.field-input { resize: vertical; min-height: 60px; }
   width: 84px; height: 84px; border-radius: 12px; border: 1.5px dashed #C9DCE6; color: var(--sky-deep);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
+
+/* 天気予報 */
+.weather-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px 2px; }
+.weather-strip-loading { font-size: 11.5px; color: #A9B7C0; padding: 8px 16px 0; }
+.weather-chip {
+  flex-shrink: 0; background: white; border-radius: 14px; box-shadow: 0 3px 10px rgba(63,169,224,0.07);
+  padding: 8px 12px; text-align: center; min-width: 58px;
+}
+.weather-date { font-size: 10px; color: #7F93A3; font-weight: 700; }
+.weather-emoji { font-size: 20px; margin: 3px 0; }
+.weather-temp { font-size: 10.5px; color: var(--navy); font-weight: 700; }
